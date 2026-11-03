@@ -5,7 +5,7 @@ import path from 'node:path'
 import { resolveTimeZone } from '@shared/format'
 import type { StatsAccount, StatsConversation, StatsModel, StatsProject, StatsRange, TokenTotals, UsageStats } from '@shared/types'
 import type { LedgerEntry } from './ledger'
-import { modelInfo, priceOf, PRICE_LIST_DATE } from './pricing'
+import { modelInfo, priceOf, PRICE_LIST_DATE, PRICE_SOURCE, US_ONLY_MULTIPLIER, WEB_SEARCH_USD } from './pricing'
 
 const HOUR = 3_600_000
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -149,6 +149,7 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
   const days = dayList.map((day) => ({ day, ...acc(), byAccount: {} as Record<string, number> }))
   const hours = ctx.range === 'today' ? Array.from({ length: 24 }, (_, hour) => ({ hour, tokens: zeroTokens(), costUsd: 0, requests: 0 })) : undefined
   const totals = acc()
+  let webSearches = 0
   const heatmap = Array.from({ length: 7 }, () => new Array<number>(24).fill(0))
   const models = new Map<string, StatsModel>()
   const sessions = new Map<string, Acc & { last: number; accounts: Map<string, number> }>()
@@ -170,6 +171,7 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
       h.requests += e.n
     }
     add(totals, e)
+    webSearches += e.ws ?? 0
     heatmap[local.weekday][local.hour] += e.c
 
     const info = modelInfo(e.m)
@@ -230,7 +232,14 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
     to: ctx.now,
     timeZone: tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
     firstDay,
-    totals: { ...done(totals), costUsd: r2(sumOf('costUsd')), units: r1(sumOf('units')), conversations: sessions.size, activeDays: days.filter((d) => d.requests > 0).length },
+    totals: {
+      ...done(totals),
+      costUsd: r2(sumOf('costUsd')),
+      units: r1(sumOf('units')),
+      conversations: sessions.size,
+      activeDays: days.filter((d) => d.requests > 0).length,
+      webSearches
+    },
     fixed: { todayUsd: r2(fixed.todayUsd), monthUsd: r2(fixed.monthUsd), allTimeUsd: r2(fixed.allTimeUsd) },
     days: days.map((d) => ({ ...done(d), byAccount: Object.fromEntries(Object.entries(d.byAccount).map(([k, v]) => [k, r2(v)])) })),
     hours: hours?.map((h) => ({ ...h, costUsd: r2(h.costUsd) })),
@@ -239,7 +248,7 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
     heatmap: heatmap.map((row) => row.map(r2)),
     topConversations: top.sort((x, y) => y.costUsd - x.costUsd).slice(0, 10),
     byAccount,
-    pricing: { asOf: PRICE_LIST_DATE, currency: 'USD', note: ctx.note },
+    pricing: { asOf: PRICE_LIST_DATE, source: PRICE_SOURCE, currency: 'USD', note: ctx.note, webSearchUsd: WEB_SEARCH_USD, usOnlyMultiplier: US_ONLY_MULTIPLIER },
     partial: ctx.partial,
     computedAt: ctx.now
   }

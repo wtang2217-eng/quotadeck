@@ -509,6 +509,8 @@ export interface ModelPrice {
   cacheRead?: number
   /** Higher prices for prompts over `above` tokens. */
   longContext?: { above: number; input: number; output: number }
+  /** Fast mode prices; the cache multipliers apply to them. */
+  fast?: { input: number; output: number }
 }
 
 export interface StatsDay {
@@ -606,7 +608,8 @@ export interface UsageStats {
   timeZone: string
   /** First day in the ledger (YYYY-MM-DD), if it has anything. */
   firstDay?: string
-  totals: { tokens: TokenTotals; costUsd: number; requests: number; conversations: number; units: number; activeDays: number }
+  /** `webSearches`: server-side web searches made by the requests ($0.01 each, included in costUsd). */
+  totals: { tokens: TokenTotals; costUsd: number; requests: number; conversations: number; units: number; activeDays: number; webSearches: number }
   /** Independent of the range (same account filter): today so far, this calendar month, everything recorded. */
   fixed: { todayUsd: number; monthUsd: number; allTimeUsd: number }
   /** Every day of the range, oldest first, including empty days. */
@@ -624,11 +627,19 @@ export interface UsageStats {
   /** Every account with usage in the range, most used first (just the one account when filtered). */
   byAccount: StatsAccount[]
   pricing: {
-    /** Date of the price list used, YYYY-MM-DD. */
+    /** Date the official price page was read, YYYY-MM-DD. */
     asOf: string
+    /** The official price page (link it next to the note). */
+    source: string
     currency: 'USD'
-    /** "按 API 标价折算，仅供参考，订阅不按这个扣费", in the UI language. Show it wherever a dollar amount is shown. */
+    /**
+     * "按 API 标价折算（官方价格页，2026-11-03），仅供参考，订阅不按这个扣费", in the UI language, with the date.
+     * Show it wherever a dollar amount is shown.
+     */
     note: string
+    /** Price of one server-side web search, and the multiplier for US-only inference (Claude 4.6 and later). */
+    webSearchUsd: number
+    usOnlyMultiplier: number
   }
   /** Transcripts are still being read for the first time; numbers will grow. */
   partial: boolean

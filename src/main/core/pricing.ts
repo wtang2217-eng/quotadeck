@@ -3,8 +3,13 @@
 
 import type { ModelFamily, ModelPrice } from '@shared/types'
 
-/** Date of the price list below (Anthropic's API prices as listed in the claude-api skill). */
-export const PRICE_LIST_DATE = '2026-10-06'
+/** The official price page these prices were read from, and when. */
+export const PRICE_SOURCE = 'https://platform.claude.com/docs/en/about-claude/pricing'
+export const PRICE_LIST_DATE = '2026-11-03'
+/** Server-side web search: $10 per 1,000 searches. */
+export const WEB_SEARCH_USD = 0.01
+/** US-only inference (inference_geo "us…") costs 1.1x on every token category for Claude 4.6 and later models. */
+export const US_ONLY_MULTIPLIER = 1.1
 
 interface PriceRow extends ModelPrice {
   match: RegExp
@@ -12,27 +17,26 @@ interface PriceRow extends ModelPrice {
 
 /**
  * US dollars per million tokens, one row per model; the first matching row wins. Cache writes cost 1.25x input
- * (5 minutes) or 2x input (1 hour); cache reads 0.1x input unless a row says otherwise.
- * Rows marked "earlier list" are models the current list no longer prices; their prices are Anthropic's last
- * published ones.
+ * (5 minutes) or 2x input (1 hour); cache reads 0.1x input unless a row says otherwise. Fast mode replaces the input
+ * and output prices; the cache multipliers then apply to the fast prices.
  */
 const ROWS: PriceRow[] = [
   { model: 'Fable 5.1', match: /(fable|mythos)-5-1(?!\d)/i, input: 10, output: 50, cacheRead: 0.25 },
-  { model: 'Fable 5', match: /(fable|mythos)-5(?![-\d])/i, input: 10, output: 50, cacheRead: 1 },
-  { model: 'Opus 5.5', match: /opus-5-5(?!\d)/i, input: 4, output: 20, cacheRead: 0.2 },
-  { model: 'Opus 5', match: /opus-5(?![-\d])/i, input: 5, output: 25 },
-  { model: 'Opus 4.8', match: /opus-4-8(?!\d)/i, input: 5, output: 25 },
+  { model: 'Fable 5', match: /(fable|mythos)-5(?![-\d])|(fable|mythos)-5-\d{8}/i, input: 10, output: 50, cacheRead: 1 },
+  { model: 'Opus 5.5', match: /opus-5-5(?!\d)/i, input: 4, output: 20, cacheRead: 0.2, fast: { input: 8, output: 40 } },
+  { model: 'Opus 5', match: /opus-5(?![-\d])|opus-5-\d{8}/i, input: 5, output: 25, fast: { input: 10, output: 50 } },
+  { model: 'Opus 4.8', match: /opus-4-8(?!\d)/i, input: 5, output: 25, fast: { input: 10, output: 50 } },
   { model: 'Opus 4.7', match: /opus-4-7(?!\d)/i, input: 5, output: 25 },
   { model: 'Opus 4.6', match: /opus-4-6(?!\d)/i, input: 5, output: 25 },
-  // Earlier list.
   { model: 'Opus 4.5', match: /opus-4-5(?!\d)/i, input: 5, output: 25 },
   { model: 'Opus 4.1', match: /opus-4-1(?!\d)/i, input: 15, output: 75 },
   { model: 'Opus 4', match: /opus-4(?![-\d])|opus-4-\d{8}/i, input: 15, output: 75 },
   { model: 'Opus 3', match: /3-opus/i, input: 15, output: 75 },
-  { model: 'Sonnet 5.5', match: /sonnet-5-5(?!\d)/i, input: 2, output: 10, cacheRead: 0.2 },
-  { model: 'Sonnet 5', match: /sonnet-5(?![-\d])/i, input: 2, output: 10 },
+  // The price page lists $0.10 for Sonnet 5.5 cache reads (0.05x input). Claude Code's own cost-state still uses
+  // $0.20, so its costUSD is higher than ours for conversations with Sonnet 5.5 cache reads.
+  { model: 'Sonnet 5.5', match: /sonnet-5-5(?!\d)/i, input: 2, output: 10, cacheRead: 0.1 },
+  { model: 'Sonnet 5', match: /sonnet-5(?![-\d])|sonnet-5-\d{8}/i, input: 2, output: 10 },
   { model: 'Sonnet 4.6', match: /sonnet-4-6(?!\d)/i, input: 3, output: 15 },
-  // Earlier list.
   { model: 'Sonnet 4.5', match: /sonnet-4-5(?!\d)/i, input: 3, output: 15 },
   { model: 'Sonnet 4', match: /sonnet-4(?![-\d])|sonnet-4-\d{8}/i, input: 3, output: 15 },
   { model: 'Sonnet 3.7', match: /3-7-sonnet/i, input: 3, output: 15 },
@@ -40,7 +44,6 @@ const ROWS: PriceRow[] = [
   // Haiku 5.5 is priced higher when a prompt is over 100K tokens.
   { model: 'Haiku 5.5', match: /haiku-5-5(?!\d)/i, input: 0.1, output: 0.5, longContext: { above: 100_000, input: 0.5, output: 2.5 } },
   { model: 'Haiku 4.5', match: /haiku-4-5(?!\d)/i, input: 1, output: 5 },
-  // Earlier list.
   { model: 'Haiku 3.5', match: /3-5-haiku/i, input: 0.8, output: 4 },
   { model: 'Haiku 3', match: /3-haiku/i, input: 0.25, output: 1.25 }
 ]
@@ -49,10 +52,18 @@ const ROWS: PriceRow[] = [
 const FALLBACK: Record<ModelFamily, ModelPrice> = {
   fable: { model: 'Fable', input: 10, output: 50 },
   opus: { model: 'Opus', input: 4, output: 20, cacheRead: 0.2 },
-  sonnet: { model: 'Sonnet', input: 2, output: 10, cacheRead: 0.2 },
+  sonnet: { model: 'Sonnet', input: 2, output: 10, cacheRead: 0.1 },
   haiku: { model: 'Haiku', input: 0.1, output: 0.5 },
   other: { model: 'other', input: 3, output: 15 }
 }
+
+/** Changes whenever a price above changes, so stored costs know they have to be computed again. */
+export const PRICE_VERSION = (() => {
+  const text = JSON.stringify([ROWS.map(({ match, ...p }) => [match.source, p]), FALLBACK, WEB_SEARCH_USD, US_ONLY_MULTIPLIER])
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0
+  return `${PRICE_LIST_DATE}.${h.toString(16).padStart(8, '0')}`
+})()
 
 export interface ModelInfo {
   family: ModelFamily
@@ -94,12 +105,32 @@ export function priceTable(): ModelPrice[] {
   return ROWS.map(({ match: _match, ...price }) => price)
 }
 
+/** Claude 4.6 and later (US-only inference costs more for these). */
+function isGeoPriced(model: string): boolean {
+  const info = modelInfo(model)
+  if (info.family === 'other' || info.major === undefined) return false
+  return info.major > 4 || (info.major === 4 && (info.minor ?? 0) >= 6)
+}
+
 export interface ReplyUsage {
   input_tokens?: number
   output_tokens?: number
   cache_read_input_tokens?: number
   cache_creation_input_tokens?: number
   cache_creation?: { ephemeral_1h_input_tokens?: number; ephemeral_5m_input_tokens?: number }
+  /** "fast" for fast mode. */
+  speed?: string | null
+  /** "us…" when the request asked for US-only inference; "global" or "not_available" otherwise. */
+  inference_geo?: string | null
+  server_tool_use?: { web_search_requests?: number }
+}
+
+export interface TokenCounts {
+  i: number
+  o: number
+  w5: number
+  w1: number
+  r: number
 }
 
 /** Token counts of one reply, with cache writes split by lifetime (they are priced differently). */
@@ -109,15 +140,46 @@ export function tokensOf(u: ReplyUsage): { input: number; output: number; cacheR
   return { input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, write5m, write1h }
 }
 
-/** US dollars at list price for one request, including a long-context tier when the prompt is over its threshold. */
-export function costOf(u: ReplyUsage, model: string): number {
+/**
+ * The price tier of one request: "f" fast mode, "l" a prompt over the model's long-context threshold, "u" US-only
+ * inference on a model where that costs more; "" is the standard price. Letters are always in this order.
+ */
+export function tierOf(u: ReplyUsage, model: string): string {
   const p = priceOf(model)
   const t = tokensOf(u)
-  const prompt = t.input + t.cacheRead + t.write5m + t.write1h
-  const long = p.longContext && prompt > p.longContext.above ? p.longContext : undefined
-  const input = long?.input ?? p.input
-  const output = long?.output ?? p.output
-  // A listed cache-read price scales with the tier like the input price does.
-  const read = p.cacheRead !== undefined ? (p.cacheRead / p.input) * input : input * 0.1
-  return (t.input * input + t.output * output + t.cacheRead * read + t.write5m * input * 1.25 + t.write1h * input * 2) / 1e6
+  let tier = ''
+  if (u.speed === 'fast' && p.fast) tier += 'f'
+  if (p.longContext && t.input + t.cacheRead + t.write5m + t.write1h > p.longContext.above) tier += 'l'
+  if (typeof u.inference_geo === 'string' && /^us/i.test(u.inference_geo) && isGeoPriced(model)) tier += 'u'
+  return tier
+}
+
+export function webSearchesOf(u: ReplyUsage): number {
+  const n = u.server_tool_use?.web_search_requests
+  return typeof n === 'number' && n > 0 ? n : 0
+}
+
+/** US dollars at list price for tokens of one model and tier, plus web searches. */
+export function costOfTokens(model: string, tier: string, t: TokenCounts, webSearches = 0): number {
+  const p = priceOf(model)
+  let input = p.input
+  let output = p.output
+  if (tier.includes('f') && p.fast) {
+    input = p.fast.input
+    output = p.fast.output
+  } else if (tier.includes('l') && p.longContext) {
+    input = p.longContext.input
+    output = p.longContext.output
+  }
+  // A listed cache-read price is a ratio of the input price, and keeps that ratio in the fast and long tiers.
+  const readRatio = p.cacheRead !== undefined ? p.cacheRead / p.input : 0.1
+  const geo = tier.includes('u') ? US_ONLY_MULTIPLIER : 1
+  const tokens = t.i * input + t.o * output + t.r * input * readRatio + t.w5 * input * 1.25 + t.w1 * input * 2
+  return (geo * tokens) / 1e6 + webSearches * WEB_SEARCH_USD
+}
+
+/** US dollars at list price for one request. */
+export function costOf(u: ReplyUsage, model: string): number {
+  const t = tokensOf(u)
+  return costOfTokens(model, tierOf(u, model), { i: t.input, o: t.output, w5: t.write5m, w1: t.write1h, r: t.cacheRead }, webSearchesOf(u))
 }

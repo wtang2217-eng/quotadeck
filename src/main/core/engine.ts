@@ -62,6 +62,7 @@ import { computeStats, ledgerCsv, type AccountLabel } from './stats'
 import { renderStatusLine } from './statusline'
 import { loadState, saveStateNow, saveStateSoon, type PersistedState } from './store'
 import { compareVersions, fetchLatestRelease } from './updates'
+import { PRICE_LIST_DATE } from './pricing'
 
 const MIN = 60_000
 const HOUR = 60 * MIN
@@ -121,6 +122,8 @@ export class Engine extends EventEmitter {
   private scanner = new UsageScanner()
   /** Every request ever seen, per hour, account, conversation and model (~/.quotadeck/ledger). */
   private ledger = new Ledger()
+  /** Requests rebuilt from transcripts, and kept as they were, when an older ledger was upgraded. */
+  lastRebuild?: { rebuilt: number; kept: number; at: number }
   private estimates = new Map<string, UsageEstimate>()
   /** Percent per unit each account's estimate uses, and its replies of the last hours (for the forecast). */
   private rates = new Map<string, { fh?: number; sd?: number }>()
@@ -256,9 +259,28 @@ export class Engine extends EventEmitter {
 
   private async computeEstimates(): Promise<void> {
     try {
-      // The first scan reads the whole history so the ledger starts complete; buckets that age out go to it.
-      await this.scanner.scan(Date.now(), { orgAt: this.orgAt, deep: true, onDrop: (old) => this.ledger.sync(entriesFrom(this.withOrgs(old), this.bucketAccounts()), Date.now(), false) })
-      if (this.scanner.complete) this.syncLedger()
+      // The first scan reads the whole history so the ledger starts complete; buckets that age out go to it. A ledger
+      // written before price tiers existed is rebuilt from that read wherever the transcripts still exist.
+      const rebuilding = this.ledger.needsRebuild && !this.scanner.complete
+      const rows = (bs: Iterable<UsageBucket>) => entriesFrom(this.withOrgs(bs), this.bucketAccounts())
+      const result = { rebuilt: 0, kept: 0 }
+      const absorb = (r: { rebuilt: number; kept: number }) => {
+        result.rebuilt += r.rebuilt
+        result.kept += r.kept
+      }
+      await this.scanner.scan(Date.now(), {
+        orgAt: this.orgAt,
+        deep: true,
+        onDrop: (old) => (rebuilding ? absorb(this.ledger.rebuild(rows(old))) : this.ledger.sync(rows(old), Date.now(), false))
+      })
+      if (this.scanner.complete) {
+        if (rebuilding) {
+          absorb(this.ledger.rebuild(rows(Object.values(this.scanner.buckets))))
+          this.ledger.markRebuilt()
+          this.lastRebuild = { ...result, at: Date.now() }
+        }
+        this.syncLedger()
+      }
       const desktopSessions = this.desktopSessionIds()
       const orgToAccount = new Map<string, string>()
       for (const a of this.s.accounts) if (a.orgUuid) orgToAccount.set(a.orgUuid, a.id)
@@ -1459,7 +1481,7 @@ export class Engine extends EventEmitter {
         }
       },
       partial: !this.scanner.complete,
-      note: this.t('stats.note')
+      note: this.t('stats.note', { date: PRICE_LIST_DATE })
     })
     saveHistoryCache()
     if (!value.partial) this.statsCache.set(key, { at: Date.now(), revision: this.ledger.revision, value })

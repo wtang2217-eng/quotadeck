@@ -34,8 +34,8 @@ export interface DemoAccountRef {
 }
 
 const MODELS: Array<{ model: string; label: string; family: ModelFamily; share: number; price: ModelPrice }> = [
-  { model: 'claude-opus-5-5', label: 'Opus 5.5', family: 'opus', share: 0.66, price: { model: 'Opus 5.5', input: 4, output: 20, cacheRead: 0.2 } },
-  { model: 'claude-sonnet-5-5', label: 'Sonnet 5.5', family: 'sonnet', share: 0.19, price: { model: 'Sonnet 5.5', input: 2, output: 10, cacheRead: 0.2 } },
+  { model: 'claude-opus-5-5', label: 'Opus 5.5', family: 'opus', share: 0.66, price: { model: 'Opus 5.5', input: 4, output: 20, cacheRead: 0.2, fast: { input: 8, output: 40 } } },
+  { model: 'claude-sonnet-5-5', label: 'Sonnet 5.5', family: 'sonnet', share: 0.19, price: { model: 'Sonnet 5.5', input: 2, output: 10, cacheRead: 0.1 } },
   { model: 'claude-fable-5-1', label: 'Fable 5.1', family: 'fable', share: 0.11, price: { model: 'Fable 5.1', input: 10, output: 50, cacheRead: 0.25 } },
   { model: 'claude-haiku-5-5', label: 'Haiku 5.5', family: 'haiku', share: 0.04, price: { model: 'Haiku 5.5', input: 0.1, output: 0.5, longContext: { above: 100_000, input: 0.5, output: 2.5 } } }
 ]
@@ -156,7 +156,7 @@ export function demoLedgerStats(
     days.push({ ...row, costUsd: r2(row.costUsd), units: r1(row.units), byAccount: Object.fromEntries(Object.entries(row.byAccount).map(([k, v]) => [k, r2(v)])) })
   }
 
-  const totals = { tokens: zero(), costUsd: 0, requests: 0, units: 0, conversations: 0, activeDays: days.filter((d) => d.requests > 0).length }
+  const totals = { tokens: zero(), costUsd: 0, requests: 0, units: 0, conversations: 0, activeDays: days.filter((d) => d.requests > 0).length, webSearches: 0 }
   for (const c of shown) {
     plus(totals.tokens, c.tokens)
     totals.costUsd += c.costUsd
@@ -165,7 +165,8 @@ export function demoLedgerStats(
   }
   totals.costUsd = r2(totals.costUsd)
   totals.units = r1(totals.units)
-  totals.conversations = Math.max(1, Math.round((range === 'today' ? 9 : 6.2 * Math.min(span, HISTORY_DAYS)) * (all ? 1 : (accounts.find((a) => a.id === accountId)?.share ?? 0) + 0.15)))
+  totals.webSearches = Math.round(totals.requests / 900)
+  totals.conversations =Math.max(1, Math.round((range === 'today' ? 9 : 6.2 * Math.min(span, HISTORY_DAYS)) * (all ? 1 : (accounts.find((a) => a.id === accountId)?.share ?? 0) + 0.15)))
 
   const fixed = {
     todayUsd: r2(mine.filter((c) => c.day === 0).reduce((s, c) => s + c.costUsd, 0)),
@@ -270,9 +271,15 @@ export function demoLedgerStats(
     topConversations,
     byAccount,
     pricing: {
-      asOf: '2026-10-06',
+      asOf: '2026-11-03',
+      source: 'https://platform.claude.com/docs/en/about-claude/pricing',
       currency: 'USD',
-      note: lang === 'zh-CN' ? '按 API 标价折算，仅供参考，订阅不按这个扣费' : 'At API list prices, for reference only; subscriptions are not billed this way'
+      note:
+        lang === 'zh-CN'
+          ? '按 API 标价折算（官方价格页，2026-11-03），仅供参考，订阅不按这个扣费'
+          : 'At API list prices (official price page, 2026-11-03), for reference only; subscriptions are not billed this way',
+      webSearchUsd: 0.01,
+      usOnlyMultiplier: 1.1
     },
     partial: false,
     computedAt: now

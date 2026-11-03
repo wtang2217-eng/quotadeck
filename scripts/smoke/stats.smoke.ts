@@ -123,6 +123,22 @@ it('stats smoke', async () => {
     if (range === 'today') console.log('hours', s.hours?.filter((h: { costUsd: number }) => h.costUsd > 0).map((h: { hour: number; costUsd: number }) => `${h.hour}h $${h.costUsd}`).join(' '))
   }
 
+  // Before / after the 2026-11-03 price check: the old table priced Sonnet 5.5 cache reads at $0.20 and had no fast
+  // mode, web search or US-only prices. Same ledger, same tokens, both ways.
+  const { costOfTokens } = await import(`${ROOT}/src/main/core/pricing`)
+  const tiers = new Map<string, number>()
+  for (const e of ledger.entries()) if (e.p) tiers.set(e.p, (tiers.get(e.p) ?? 0) + e.n)
+  console.log('\nrequests outside the standard tier', JSON.stringify(Object.fromEntries(tiers)), '| web searches', [...ledger.entries()].reduce((s, e) => s + (e.ws ?? 0), 0))
+  // The old table already had Haiku 5.5's long-context tier; it had no fast, US-only or web search prices.
+  const old = [...ledger.entries()].map((e) => ({ ...e, c: costOfTokens(e.m, (e.p ?? '').replace(/[fu]/g, ''), e, 0) + (/sonnet-5-5/.test(e.m) ? (e.r * 0.1) / 1e6 : 0) }))
+  const fixedOf = (entries: Iterable<{ h: number }>, range: '7d' | 'all') => computeStats(entries as never, { ...ctx, range })
+  const before7 = fixedOf(old, '7d')
+  const after7 = fixedOf(ledger.entries(), '7d')
+  const line = (s: { fixed: { todayUsd: number; monthUsd: number; allTimeUsd: number } }, week: number) =>
+    `today $${s.fixed.todayUsd} | this month $${s.fixed.monthUsd} | all time $${s.fixed.allTimeUsd} | last 7 days $${week}`
+  console.log('before:', line(before7, before7.totals.costUsd))
+  console.log('after: ', line(after7, after7.totals.costUsd))
+
   // Run-out forecast per account, the way the engine computes it.
   const now = Date.now()
   const events = attribute(scanner.events, { samples, sessionAccounts: state.sessionAccounts ?? {}, desktopSessions, defaultCliAccountId: def, orgToAccount })
