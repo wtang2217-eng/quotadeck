@@ -150,6 +150,7 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
   const hours = ctx.range === 'today' ? Array.from({ length: 24 }, (_, hour) => ({ hour, tokens: zeroTokens(), costUsd: 0, requests: 0 })) : undefined
   const totals = acc()
   let webSearches = 0
+  const background = { tokens: zeroTokens(), costUsd: 0, webSearches: 0 }
   const heatmap = Array.from({ length: 7 }, () => new Array<number>(24).fill(0))
   const models = new Map<string, StatsModel>()
   const sessions = new Map<string, Acc & { last: number; accounts: Map<string, number> }>()
@@ -172,6 +173,11 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
     }
     add(totals, e)
     webSearches += e.ws ?? 0
+    if (e.k === 'b') {
+      addTokens(background.tokens, e)
+      background.costUsd += e.c
+      background.webSearches += e.ws ?? 0
+    }
     heatmap[local.weekday][local.hour] += e.c
 
     const info = modelInfo(e.m)
@@ -238,7 +244,8 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
       units: r1(sumOf('units')),
       conversations: sessions.size,
       activeDays: days.filter((d) => d.requests > 0).length,
-      webSearches
+      webSearches,
+      background: { ...background, costUsd: r2(background.costUsd) }
     },
     fixed: { todayUsd: r2(fixed.todayUsd), monthUsd: r2(fixed.monthUsd), allTimeUsd: r2(fixed.allTimeUsd) },
     days: days.map((d) => ({ ...done(d), byAccount: Object.fromEntries(Object.entries(d.byAccount).map(([k, v]) => [k, r2(v)])) })),
@@ -259,30 +266,43 @@ const csvCell = (v: string | number) => {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
-/** One row per day × account × model of the range, oldest first; days in the chosen zone. */
-export function ledgerCsv(entries: Iterable<LedgerEntry>, ctx: Omit<StatsContext, 'session' | 'partial' | 'note'>, header: string[]): string {
+/**
+ * One row per day × account × model × type (transcript requests or Claude Code's background requests) of the range,
+ * oldest first; days in the chosen zone. `kinds` names the two types in the UI language.
+ */
+export function ledgerCsv(
+  entries: Iterable<LedgerEntry>,
+  ctx: Omit<StatsContext, 'session' | 'partial' | 'note'>,
+  header: string[],
+  kinds: { request: string; background: string } = { request: 'request', background: 'background' }
+): string {
   const stats = computeStats([], { ...ctx, session: () => ({}), partial: false, note: '' })
   const firstShown = stats.days[0]?.day ?? ''
   const tz = resolveTimeZone(ctx.timeZone)
   const clock = zonedClock(tz)
   const all = ctx.accountId === 'all' || ctx.accountId === undefined
-  const rows = new Map<string, { day: string; account: string; model: string; v: Acc }>()
+  const rows = new Map<string, { day: string; account: string; model: string; background: boolean; v: Acc }>()
   for (const e of entries) {
     const a = ctx.accountOf(e)
     if (!all && a !== ctx.accountId) continue
     const day = clock(e.h).day
     if (ctx.range !== 'all' && day < firstShown) continue
     const model = modelInfo(e.m).label
-    const k = `${day}|${a}|${model}`
-    const row = rows.get(k) ?? { day, account: a, model, v: acc() }
+    const background = e.k === 'b'
+    const k = `${day}|${a}|${model}|${background ? 'b' : ''}`
+    const row = rows.get(k) ?? { day, account: a, model, background, v: acc() }
     add(row.v, e)
     rows.set(k, row)
   }
   const lines = [header.map(csvCell).join(',')]
-  for (const r of [...rows.values()].sort((x, y) => x.day.localeCompare(y.day) || x.account.localeCompare(y.account) || x.model.localeCompare(y.model))) {
+  const sorted = [...rows.values()].sort(
+    (x, y) => x.day.localeCompare(y.day) || x.account.localeCompare(y.account) || x.model.localeCompare(y.model) || Number(x.background) - Number(y.background)
+  )
+  for (const r of sorted) {
     const who = ctx.accountLabel(r.account)
     const t = r.v.tokens
-    lines.push([r.day, who.label, who.email ?? '', r.model, t.input, t.output, t.cacheWrite5m, t.cacheWrite1h, t.cacheRead, r.v.requests, r2(r.v.costUsd).toFixed(2)].map(csvCell).join(','))
+    const type = r.background ? kinds.background : kinds.request
+    lines.push([r.day, who.label, who.email ?? '', r.model, type, t.input, t.output, t.cacheWrite5m, t.cacheWrite1h, t.cacheRead, r.v.requests, r2(r.v.costUsd).toFixed(2)].map(csvCell).join(','))
   }
   return lines.join('\r\n') + '\r\n'
 }

@@ -68,6 +68,20 @@ it('engine smoke', async () => {
     'requests',
     everything.totals.requests
   )
+  // Background requests booked from cost-state: today / this month / all time with and without them.
+  const { zonedClock } = await import(`${ROOT}/src/main/core/stats`)
+  const clock = zonedClock('Asia/Shanghai')
+  const today = clock(Date.now())
+  const sums = { today: [0, 0], month: [0, 0], all: [0, 0] }
+  for (const x of (e as unknown as { ledger: { entries(): Iterable<{ h: number; c: number; k?: string }> } }).ledger.entries()) {
+    const day = clock(x.h)
+    const slot = x.k === 'b' ? 1 : 0
+    sums.all[slot] += x.c
+    if (day.month === today.month) sums.month[slot] += x.c
+    if (day.day === today.day) sums.today[slot] += x.c
+  }
+  for (const [k, [req, bg]] of Object.entries(sums)) console.log(`${k}: transcript only $${req.toFixed(2)} → with background $${(req + bg).toFixed(2)} (background $${bg.toFixed(2)})`)
+  console.log('background line (all):', JSON.stringify(everything.totals.background))
   const csv = await e.ledgerCsv({ range: '30d', accountId: 'all' })
   console.log('csv rows (30d, day × account × model)', csv.csv.trimEnd().split('\r\n').length - 1, 'file', csv.fileName)
   t = Date.now()

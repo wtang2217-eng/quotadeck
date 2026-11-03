@@ -156,7 +156,16 @@ export function demoLedgerStats(
     days.push({ ...row, costUsd: r2(row.costUsd), units: r1(row.units), byAccount: Object.fromEntries(Object.entries(row.byAccount).map(([k, v]) => [k, r2(v)])) })
   }
 
-  const totals = { tokens: zero(), costUsd: 0, requests: 0, units: 0, conversations: 0, activeDays: days.filter((d) => d.requests > 0).length, webSearches: 0 }
+  const totals = {
+    tokens: zero(),
+    costUsd: 0,
+    requests: 0,
+    units: 0,
+    conversations: 0,
+    activeDays: days.filter((d) => d.requests > 0).length,
+    webSearches: 0,
+    background: { tokens: zero(), costUsd: 0, webSearches: 0 }
+  }
   for (const c of shown) {
     plus(totals.tokens, c.tokens)
     totals.costUsd += c.costUsd
@@ -166,6 +175,8 @@ export function demoLedgerStats(
   totals.costUsd = r2(totals.costUsd)
   totals.units = r1(totals.units)
   totals.webSearches = Math.round(totals.requests / 900)
+  // About an eighth of the dollars are Claude Code's background requests (compacting context, titles, web search).
+  totals.background = { tokens: scale(totals.tokens, 0.11), costUsd: r2(totals.costUsd * 0.125), webSearches: totals.webSearches }
   totals.conversations =Math.max(1, Math.round((range === 'today' ? 9 : 6.2 * Math.min(span, HISTORY_DAYS)) * (all ? 1 : (accounts.find((a) => a.id === accountId)?.share ?? 0) + 0.15)))
 
   const fixed = {

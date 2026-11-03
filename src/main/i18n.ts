@@ -107,7 +107,9 @@ const zh = {
   'stats.note': '按 API 标价折算（官方价格页，{date}），仅供参考，订阅不按这个扣费',
   'stats.other': '其他',
   'stats.oldAccount': '旧号',
-  'csv.header': '日期|账号|邮箱|模型|输入 token|输出 token|缓存写入 token（5 分钟）|缓存写入 token（1 小时）|缓存读取 token|请求次数|按 API 标价折算（美元）',
+  'csv.header': '日期|账号|邮箱|模型|类型|输入 token|输出 token|缓存写入 token（5 分钟）|缓存写入 token（1 小时）|缓存读取 token|请求次数|按 API 标价折算（美元）',
+  'csv.kind.request': '对话',
+  'csv.kind.background': '后台',
   'csv.fileName': 'QuotaDeck 用量账本 {day}'
 }
 
@@ -216,7 +218,9 @@ const en: Record<keyof typeof zh, string> = {
   'stats.note': 'At API list prices (official price page, {date}), for reference only; subscriptions are not billed this way',
   'stats.other': 'Other',
   'stats.oldAccount': 'Old account',
-  'csv.header': 'Date|Account|Email|Model|Input tokens|Output tokens|Cache write tokens (5 min)|Cache write tokens (1 h)|Cache read tokens|Requests|At API list prices (USD)',
+  'csv.header': 'Date|Account|Email|Model|Type|Input tokens|Output tokens|Cache write tokens (5 min)|Cache write tokens (1 h)|Cache read tokens|Requests|At API list prices (USD)',
+  'csv.kind.request': 'Conversation',
+  'csv.kind.background': 'Background',
   'csv.fileName': 'QuotaDeck usage ledger {day}'
 }
 

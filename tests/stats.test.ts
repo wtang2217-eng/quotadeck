@@ -148,19 +148,29 @@ describe('computeStats', () => {
     expect(s.fixed).toEqual({ todayUsd: 1.5, monthUsd: 1.75, allTimeUsd: 1.75 })
   })
 
-  it('writes one CSV row per day, account and model', () => {
-    const header = ['日期', '账号', '邮箱', '模型', '输入', '输出', '写5分钟', '写1小时', '读取', '请求', '美元']
-    const csv = ledgerCsv(entries, { ...ctx, range: '7d' }, header)
+  it('writes one CSV row per day, account, model and type', () => {
+    const header = ['日期', '账号', '邮箱', '模型', '类型', '输入', '输出', '写5分钟', '写1小时', '读取', '请求', '美元']
+    const kinds = { request: '对话', background: '后台' }
+    // Claude Code's background requests of a run on the main account today.
+    const bg = entry({ h: Date.UTC(2026, 10, 3, 2), s: 's1', k: 'b', run: 's1@1', n: 0, c: 0.3 })
+    const csv = ledgerCsv([...entries, bg], { ...ctx, range: '7d' }, header, kinds)
     const lines = csv.trimEnd().split('\r\n')
     expect(lines[0]).toBe(header.join(','))
     expect(lines.slice(1)).toEqual([
-      '2026-11-02,副号,b@example.com,Sonnet 5.5,100,10,40,10,1000,1,0.25',
-      '2026-11-03,主号,a@example.com,Opus 5.5,100,10,40,10,1000,1,1.00',
-      '2026-11-03,副号,b@example.com,Opus 5.5,100,10,40,10,1000,2,1.50'
+      '2026-11-02,副号,b@example.com,Sonnet 5.5,对话,100,10,40,10,1000,1,0.25',
+      '2026-11-03,主号,a@example.com,Opus 5.5,对话,100,10,40,10,1000,1,1.00',
+      '2026-11-03,主号,a@example.com,Opus 5.5,后台,100,10,40,10,1000,0,0.30',
+      '2026-11-03,副号,b@example.com,Opus 5.5,对话,100,10,40,10,1000,2,1.50'
     ])
-    expect(ledgerCsv(entries, { ...ctx, range: 'all' }, header).trimEnd().split('\r\n')).toHaveLength(6)
+    expect(ledgerCsv(entries, { ...ctx, range: 'all' }, header, kinds).trimEnd().split('\r\n')).toHaveLength(6)
+    // The statistics count background requests in every total and show them on their own line.
+    const s = computeStats([...entries, bg], { ...ctx, range: '7d' })
+    expect(s.totals.costUsd).toBe(3.05)
+    expect(s.totals.requests).toBe(4)
+    expect(s.totals.background).toMatchObject({ costUsd: 0.3, webSearches: 0 })
+    expect(s.byAccount.find((a) => a.accountId === 'A')?.costUsd).toBe(1.3)
     // Commas and quotes in a name are quoted.
-    const odd = ledgerCsv(entries.slice(0, 1), { ...ctx, range: '7d', accountLabel: () => ({ label: 'a, "b"', kind: 'account' }) }, header)
+    const odd = ledgerCsv(entries.slice(0, 1), { ...ctx, range: '7d', accountLabel: () => ({ label: 'a, "b"', kind: 'account' }) }, header, kinds)
     expect(odd.split('\r\n')[1]).toContain('"a, ""b"""')
   })
 
