@@ -130,7 +130,7 @@ export async function captureScreenshots(win: BrowserWindow, backend: Backend, o
 async function captureTray(main: BrowserWindow): Promise<Buffer> {
   const win = new BrowserWindow({
     width: 360,
-    height: 268,
+    height: 246,
     show: false,
     frame: false,
     webPreferences: { preload: path.join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, backgroundThrottling: false }

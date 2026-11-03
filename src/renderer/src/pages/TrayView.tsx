@@ -71,8 +71,8 @@ export function TrayView({ api }: { api: QuotaDeckApi }) {
               <div className="tray-name ellipsis" title={displayName(a)}>
                 {shortName(a)}
               </div>
-              <MeterCell w={a.usage?.fiveHour} estimatePct={a.estimate?.fiveHour} estimateResetsAt={a.estimate?.fiveHourResetsAt} limitResetsAt={a.limit?.kind === 'session' ? a.limit.resetsAt : undefined} />
-              <MeterCell w={a.usage?.sevenDay} estimatePct={a.estimate?.sevenDay} limitResetsAt={a.limit?.kind === 'weekly' ? a.limit.resetsAt : undefined} />
+              <MeterCell compact w={a.usage?.fiveHour} estimatePct={a.estimate?.fiveHour} />
+              <MeterCell compact w={a.usage?.sevenDay} estimatePct={a.estimate?.sevenDay} />
             </div>
           ))}
         </div>
