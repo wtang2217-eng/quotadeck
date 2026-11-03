@@ -366,7 +366,7 @@ function LedgerBody({ stats, group }: { stats: UsageStats; group: Group }) {
       />
       <div className="note">
         <IconInfo size={14} />
-        {stats.pricing.note}
+        {t('priceNote', { date: stats.pricing.asOf })}
       </div>
 
       <section className="sec">

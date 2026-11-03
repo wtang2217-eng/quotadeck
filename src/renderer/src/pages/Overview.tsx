@@ -156,10 +156,10 @@ function OverviewMetrics({ stats }: { stats?: UsageStats }) {
           { label: t('metricAllUsd'), value: formatUsd(stats?.fixed.allTimeUsd ?? 0), sub: stats?.firstDay ? t('metricSince', { day: stats.firstDay }) : undefined }
         ]}
       />
-      {stats?.pricing.note && (
+      {stats && (
         <div className="note">
           <IconInfo size={14} />
-          {stats.pricing.note}
+          {t('priceNote', { date: stats.pricing.asOf })}
         </div>
       )}
     </>
