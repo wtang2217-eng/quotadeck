@@ -347,7 +347,7 @@ export function Overview() {
 
       <section className="sec">
         <div className="sec-head">
-          <h2 className="sec-title">{t('colAccount')}</h2>
+          <h2 className="sec-title">{t('secAccountsTitle')}</h2>
           <span className="sec-sub">{accounts.length}</span>
         </div>
         <AccountTable accounts={accounts} onScope={scope === 'all' ? setScope : undefined} />
