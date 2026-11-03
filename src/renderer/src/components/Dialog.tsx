@@ -9,6 +9,7 @@ import { IconX } from './icons'
  */
 export function Dialog({
   title,
+  kicker,
   sub,
   icon,
   wide,
@@ -18,6 +19,8 @@ export function Dialog({
   footer
 }: {
   title: ReactNode
+  /** Mono label above the title. */
+  kicker?: ReactNode
   sub?: ReactNode
   icon?: ReactNode
   wide?: boolean
@@ -63,6 +66,7 @@ export function Dialog({
         <div className="dialog-head">
           {icon && <div className="dialog-head-icon">{icon}</div>}
           <div style={{ flex: 1, minWidth: 0 }}>
+            {kicker && <span className="kicker dialog-kicker">{kicker}</span>}
             <h2 className="dialog-title">{title}</h2>
             {sub && <div className="dialog-sub">{sub}</div>}
           </div>

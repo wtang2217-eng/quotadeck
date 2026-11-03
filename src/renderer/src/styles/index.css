@@ -1,0 +1,9 @@
+/* QuotaDeck renderer styles. Order matters: tokens first, page leftovers last. */
+@import './tokens.css';
+@import './base.css';
+@import './shell.css';
+@import './controls.css';
+@import './dashboard.css';
+@import './dialog.css';
+@import './appearance.css';
+@import './pages.css';

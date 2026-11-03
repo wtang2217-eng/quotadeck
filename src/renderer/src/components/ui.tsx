@@ -117,6 +117,7 @@ export function StatusChip({ status, t }: { status: AccountStatus; t: T }) {
   )
 }
 
+/** Monogram: the initial in a square; the account's own color marks one corner. */
 export function Avatar({
   account,
   size = 40,
@@ -127,7 +128,7 @@ export function Avatar({
   live?: boolean
 }) {
   const ch = initial(account)
-  const radius = Math.round(size * 0.3)
+  const cjk = /[㐀-鿿]/.test(ch)
   return (
     <span
       className="avatar"
@@ -135,14 +136,54 @@ export function Avatar({
       style={{
         width: size,
         height: size,
-        borderRadius: radius,
-        fontSize: Math.round(size * 0.42),
-        background: `linear-gradient(140deg, color-mix(in srgb, ${account.color} 78%, white), ${account.color} 60%, color-mix(in srgb, ${account.color} 80%, black))`
+        fontSize: Math.round(size * (cjk ? 0.4 : 0.44)),
+        ['--tone' as string]: account.color
       }}
     >
       {ch}
       {live && <span className="avatar-live" />}
     </span>
+  )
+}
+
+/** Page title block: a numbered kicker, the title, optional actions on the right, a heavy rule under it. */
+export function PageHead({
+  index,
+  kicker,
+  title,
+  sub,
+  actions
+}: {
+  index: number
+  kicker: string
+  title: string
+  sub?: ReactNode
+  actions?: ReactNode
+}) {
+  return (
+    <header className="page-head">
+      <span className="kicker">
+        {String(index).padStart(2, '0')} / {kicker}
+      </span>
+      <div className="page-head-row">
+        <div style={{ minWidth: 0 }}>
+          <h1 className="page-title">{title}</h1>
+          {sub && <div className="page-sub">{sub}</div>}
+        </div>
+        {actions && <div className="page-actions">{actions}</div>}
+      </div>
+    </header>
+  )
+}
+
+/** Numbered section label. */
+export function SectionHead({ index, title, meta }: { index: number; title: string; meta?: ReactNode }) {
+  return (
+    <div className="sec-head">
+      <span className="sec-num">{String(index).padStart(2, '0')}</span>
+      <h2 className="sec-title">{title}</h2>
+      {meta && <span className="sec-meta">{meta}</span>}
+    </div>
   )
 }
 

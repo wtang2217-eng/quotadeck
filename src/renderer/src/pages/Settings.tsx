@@ -5,6 +5,7 @@ import type { IntegrationStatus, Language, Settings as SettingsT, TerminalChoice
 import {
   IconBell,
   IconCheck,
+  IconEye,
   IconFolder,
   IconInfo,
   IconMerge,
@@ -14,6 +15,7 @@ import {
   IconSwitch,
   IconVolume
 } from '../components/icons'
+import { AccentPicker, StylePicker } from '../components/StylePicker'
 import { ConfirmButton, Segmented, Spinner, Toggle } from '../components/ui'
 import { useApp } from '../context'
 import type { TKey } from '../i18n'
@@ -162,17 +164,15 @@ export function Settings() {
       </header>
 
       <div className="settings">
-        <Section icon={<IconSliders size={16} />} title={t('setGeneral')}>
-          <Row label={t('setLanguage')}>
-            <Segmented<Language>
-              ariaLabel={t('setLanguage')}
-              value={s.language}
-              onChange={(v) => void update({ language: v, continuePrompt: s.continuePrompt === DEFAULT_CONTINUE_PROMPT[s.language] ? DEFAULT_CONTINUE_PROMPT[v] : s.continuePrompt })}
-              options={[
-                { value: 'zh-CN', label: '中文' },
-                { value: 'en', label: 'English' }
-              ]}
-            />
+        <Section icon={<IconEye size={16} />} title={t('setAppearance')}>
+          <div className="set-row top" style={{ display: 'block' }}>
+            <div className="set-text" style={{ marginBottom: 14 }}>
+              <div className="set-label">{t('setStyle')}</div>
+            </div>
+            <StylePicker value={s.uiStyle ?? 'swiss'} onChange={(v) => void update({ uiStyle: v })} />
+          </div>
+          <Row label={t('setAccent')} hint={t('setAccentHint')}>
+            <AccentPicker value={s.accent ?? 'ikb'} disabled={(s.uiStyle ?? 'swiss') !== 'swiss'} onChange={(v) => void update({ accent: v })} />
           </Row>
           <Row label={t('setTheme')}>
             <Segmented<ThemeSetting>
@@ -193,6 +193,20 @@ export function Settings() {
                 { value: 'system', label: t('setThemeSystem') },
                 { value: 'light', label: t('setThemeLight') },
                 { value: 'dark', label: t('setThemeDark') }
+              ]}
+            />
+          </Row>
+        </Section>
+
+        <Section icon={<IconSliders size={16} />} title={t('setGeneral')}>
+          <Row label={t('setLanguage')}>
+            <Segmented<Language>
+              ariaLabel={t('setLanguage')}
+              value={s.language}
+              onChange={(v) => void update({ language: v, continuePrompt: s.continuePrompt === DEFAULT_CONTINUE_PROMPT[s.language] ? DEFAULT_CONTINUE_PROMPT[v] : s.continuePrompt })}
+              options={[
+                { value: 'zh-CN', label: '中文' },
+                { value: 'en', label: 'English' }
               ]}
             />
           </Row>

@@ -1,0 +1,231 @@
+/* Appearance pickers in settings: each style as a small specimen, the Swiss highlight color as swatches.
+   The specimens hold their own colors because they show the other styles. */
+
+.style-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  width: 100%;
+}
+.style-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0 0 4px;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink);
+}
+.specimen {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 96px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  outline: 1px solid var(--rule-2);
+  transition:
+    outline-color var(--dur-2) var(--ease),
+    outline-offset var(--dur-2) var(--ease);
+}
+.style-opt:hover .specimen {
+  outline-color: var(--ink-3);
+}
+.style-opt.on .specimen {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.style-opt-name {
+  font-size: 13px;
+  font-weight: 650;
+}
+.style-opt-hint {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.specimen-rule {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 12px;
+  height: 2px;
+}
+.specimen-label {
+  position: absolute;
+  left: 14px;
+  top: 22px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+}
+.specimen-num {
+  position: absolute;
+  left: 12px;
+  top: 34px;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+.specimen-num i {
+  font-style: normal;
+  font-size: 0.42em;
+  margin-left: 2px;
+}
+.specimen-meter {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  height: 4px;
+}
+.specimen-meter span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 27%;
+}
+
+.specimen-swiss {
+  background: #fafaf8 radial-gradient(rgba(10, 10, 10, 0.1) 1px, transparent 1.3px) 0 0 / 12px 12px;
+  color: #0a0a0a;
+  font-family: var(--font-sans);
+}
+.specimen-swiss .specimen-rule {
+  background: #0a0a0a;
+}
+.specimen-swiss .specimen-num {
+  font-weight: 200;
+}
+.specimen-swiss .specimen-meter {
+  background: #e4e4e1;
+}
+.specimen-swiss .specimen-meter span {
+  background: #0a0a0a;
+}
+/* The square follows the chosen highlight color. */
+.specimen-swiss::after {
+  content: '';
+  position: absolute;
+  right: 14px;
+  top: 22px;
+  width: 14px;
+  height: 14px;
+  background: var(--swatch, #002fa7);
+}
+html[data-accent='lemon'] .specimen-swiss {
+  --swatch: #ffd500;
+}
+html[data-accent='green'] .specimen-swiss {
+  --swatch: #c5e803;
+}
+html[data-accent='orange'] .specimen-swiss {
+  --swatch: #ff6b35;
+}
+
+.specimen-editorial {
+  background: #f1efea;
+  color: #12110f;
+  font-family: var(--font-serif);
+}
+.specimen-editorial .specimen-rule {
+  height: 4px;
+  border-top: 1px solid #12110f;
+  border-bottom: 1px solid #12110f;
+}
+.specimen-editorial .specimen-num {
+  font-weight: 420;
+  letter-spacing: -0.02em;
+}
+.specimen-editorial .specimen-num i {
+  font-style: italic;
+}
+.specimen-editorial .specimen-meter {
+  height: 2px;
+  background: #dcd8ce;
+}
+.specimen-editorial .specimen-meter span {
+  background: #12110f;
+}
+
+.specimen-eclipse {
+  background:
+    radial-gradient(160px 80px at 100% 0%, rgba(96, 165, 250, 0.24), transparent 70%),
+    #0c0e15;
+  color: #eceef5;
+  font-family: var(--font-sans);
+}
+.specimen-eclipse .specimen-rule {
+  height: 1px;
+  background: linear-gradient(90deg, #2dd4bf, #60a5fa 36%, #a78bfa 68%, #f9a8d4);
+}
+.specimen-eclipse .specimen-label {
+  color: #7c8399;
+}
+.specimen-eclipse .specimen-num {
+  font-weight: 300;
+}
+.specimen-eclipse .specimen-meter {
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.specimen-eclipse .specimen-meter span {
+  width: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #2dd4bf, #60a5fa 36%, #a78bfa 68%, #f9a8d4);
+  clip-path: inset(0 73% 0 0 round 4px);
+}
+
+.accent-picker {
+  display: flex;
+  gap: 16px;
+}
+.accent-picker.disabled {
+  opacity: 0.38;
+}
+.accent-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.accent-opt:disabled {
+  cursor: not-allowed;
+}
+.accent-chip {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-thumb);
+  outline: 1px solid var(--rule-2);
+  transition:
+    outline-color var(--dur-2) var(--ease),
+    outline-offset var(--dur-2) var(--ease);
+}
+.accent-opt.on .accent-chip {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.accent-name {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+.accent-opt.on .accent-name {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+html[data-style='eclipse'] .specimen {
+  border-radius: 12px;
+}
+html[data-style='eclipse'] .style-opt.on .specimen {
+  outline-color: var(--accent-line);
+}

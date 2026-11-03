@@ -58,32 +58,29 @@ function QuotaRow({
     <div className={`quota-row${estimatedAny && tip ? ' has-tip' : ''}`} data-tip={estimatedAny ? tip : undefined} tabIndex={estimatedAny && tip ? 0 : undefined}>
       <div className="quota-top">
         <span className="quota-label">{t(label)}</span>
-        <span className={`quota-reset${level === 'bad' && !estReset ? ' bad' : ''}`}>{reset}</span>
         {shown.estimated && <span className="est-chip">{t('estChip')}</span>}
-        <span className={`quota-pct num${shown.pct === undefined ? ' na' : levelClass}`}>
-          {shown.pct === undefined ? (
-            '—'
-          ) : shown.estimated ? (
-            <>
-              <span className="approx">{t('approx')}</span>
-              <AnimatedNumber value={shown.pct} />%
-            </>
-          ) : (
-            <>
-              <AnimatedNumber value={shown.pct} />%
-            </>
-          )}
-        </span>
       </div>
-      <div className="meter" aria-hidden="true">
-        {w && <div className={`meter-fill${levelClass}`} style={{ width: `${recorded}%` }} />}
-        {extra > 0 && (
-          <div
-            className={`meter-est${levelClass}`}
-            style={{ left: `calc(${recorded}% - ${w && recorded > 0 ? 4 : 0}px)`, width: `calc(${extra}% + ${w && recorded > 0 ? 4 : 0}px)` }}
-          />
+      <div className={`quota-pct num${shown.pct === undefined ? ' na' : levelClass}`}>
+        {shown.pct === undefined ? (
+          '—'
+        ) : (
+          <>
+            {shown.estimated && <span className="approx">{t('approx').trim()}</span>}
+            <AnimatedNumber value={shown.pct} />
+            <span className="pct-sign">%</span>
+          </>
         )}
       </div>
+      <div className="meter" aria-hidden="true">
+        {w && (
+          <div
+            className={`meter-fill${levelClass}`}
+            style={{ width: `${recorded}%`, ['--meter-span' as string]: recorded > 0 ? `${(100 / recorded) * 100}%` : '100%' }}
+          />
+        )}
+        {extra > 0 && <div className={`meter-est${levelClass}`} style={{ left: `${recorded}%`, width: `${extra}%` }} />}
+      </div>
+      <div className={`quota-reset${level === 'bad' && !estReset ? ' bad' : ''}`}>{reset || ' '}</div>
     </div>
   )
 }
@@ -152,11 +149,11 @@ export function AccountCard({ account }: { account: AccountView }) {
 
   return (
     <article
-      className={`card acct${recommended ? ' is-recommended' : ''}${limited ? ' is-limited' : ''}`}
+      className={`card acct${recommended ? ' is-recommended' : ''}${limited ? ' is-limited' : ''}${account.isDesktopCurrent ? ' is-current' : ''}`}
       aria-label={account.nickname || account.email}
     >
       <div className="acct-head">
-        <Avatar account={account} size={42} live={account.isDesktopCurrent} />
+        <Avatar account={account} size={40} />
         <div className="acct-id">
           <div className="acct-name-row">
             <span className="acct-name ellipsis">{account.nickname || account.email || account.id.slice(0, 8)}</span>
@@ -240,18 +237,17 @@ export function AccountCard({ account }: { account: AccountView }) {
           <div className="trend-head">
             <span>{t('last7Days')}</span>
             <span className="grow" />
-            <span className="legend" style={{ color: account.color }}>
+            <span className="legend">
               <i />
-              <span style={{ color: 'var(--text-3)' }}>{t('legend5h')}</span>
+              {t('legend5h')}
             </span>
-            <span className="legend" style={{ color: 'var(--text-3)' }}>
+            <span className="legend">
               <i className="dashed" />
               {t('legendWeek')}
             </span>
           </div>
           <Sparkline
             points={account.history}
-            color={account.color}
             now={now}
             lang={lang}
             tz={tz}

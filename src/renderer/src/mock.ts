@@ -1,5 +1,5 @@
 // Browser-only stand-in for window.qd, backed by the shared demo data.
-// Query parameters for previewing states: ?lang=en ?theme=dark ?empty=1 ?conflict=1 ?warn=1 ?dup=1 ?ratio=1 ?page=settings ?dialog=switch|add ?still=1
+// Query parameters for previewing states: ?lang=en ?theme=dark ?style=swiss|editorial|eclipse ?accent=ikb|lemon|green|orange ?empty=1 ?conflict=1 ?warn=1 ?dup=1 ?ratio=1 ?page=settings ?dialog=switch|add ?still=1
 
 import type { QuotaDeckApi } from '@shared/api'
 import { demoConversations, demoState } from '@shared/demo'
@@ -21,6 +21,10 @@ export function createMockApi(): QuotaDeckApi {
     const s = demoState(l)
     const theme = params.get('theme')
     if (theme === 'dark' || theme === 'light') s.settings.theme = theme
+    const style = params.get('style')
+    if (style === 'swiss' || style === 'editorial' || style === 'eclipse') s.settings.uiStyle = style
+    const accent = params.get('accent')
+    if (accent === 'ikb' || accent === 'lemon' || accent === 'green' || accent === 'orange') s.settings.accent = accent
     if (params.get('empty') === '1') {
       s.accounts = []
       s.recommendedAccountId = undefined

@@ -41,17 +41,18 @@ function smoothPath(pts: P[]): string {
   return d
 }
 
-/** 7-day trend: the 5-hour window as a filled curve, the weekly window as a dashed line. */
+/**
+ * 7-day trend: the 5-hour window as a line, the weekly window dashed, day ticks along the base.
+ * Colors come from the style tokens (--chart-1…4, --chart-area), so each style draws it its own way.
+ */
 export function Sparkline({
   points,
-  color,
   now,
   lang,
   tz,
   labels
 }: {
   points: UsagePoint[]
-  color: string
   now: number
   lang: Language
   tz: string
@@ -93,7 +94,8 @@ export function Sparkline({
     const y = (v: number) => PAD_TOP + (1 - Math.min(100, Math.max(0, v)) / 100) * (H - PAD_TOP - PAD_BOTTOM)
     const fh = out.filter((p) => p.fh !== undefined).map((p) => ({ x: x(p.t), y: y(p.fh!), t: p.t, v: p.fh!, sd: p.sd }))
     const sd = out.filter((p) => p.sd !== undefined).map((p) => ({ x: x(p.t), y: y(p.sd!) }))
-    return { fh, sd, y }
+    const ticks = Array.from({ length: 8 }, (_, i) => x(start + i * DAY))
+    return { fh, sd, y, ticks }
   }, [points, now, w])
 
   if (data.fh.length < 2 && data.sd.length < 2) {
@@ -128,76 +130,53 @@ export function Sparkline({
         role="img"
       >
         <defs>
+          <linearGradient id={`line-${gid}`} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2={w} y2="0">
+            <stop offset="0" className="spark-stop-1" />
+            <stop offset="0.36" className="spark-stop-2" />
+            <stop offset="0.68" className="spark-stop-3" />
+            <stop offset="1" className="spark-stop-4" />
+          </linearGradient>
           <linearGradient id={`area-${gid}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={color} stopOpacity="0.32" />
-            <stop offset="1" stopColor={color} stopOpacity="0" />
+            <stop offset="0" className="spark-area-top" />
+            <stop offset="1" className="spark-area-bottom" />
           </linearGradient>
         </defs>
-        <line x1="0" x2={w} y1={data.y(100)} y2={data.y(100)} stroke="var(--border)" strokeDasharray="2 4" />
-        <line x1="0" x2={w} y1={H - PAD_BOTTOM} y2={H - PAD_BOTTOM} stroke="var(--border)" />
+        <line className="spark-grid" x1="0" x2={w} y1={data.y(100)} y2={data.y(100)} strokeDasharray="1 4" />
+        <line className="spark-base" x1="0" x2={w} y1={H - PAD_BOTTOM} y2={H - PAD_BOTTOM} />
+        {data.ticks.map((tx, i) => (
+          <line key={i} className="spark-base" x1={tx} x2={tx} y1={H - PAD_BOTTOM} y2={H - PAD_BOTTOM + 4} />
+        ))}
         {area && <path className="spark-area" d={area} fill={`url(#area-${gid})`} />}
-        {weekly && (
-          <path
-            d={weekly}
-            fill="none"
-            stroke="var(--text-3)"
-            strokeWidth="1.4"
-            strokeDasharray="3 3"
-            opacity="0.8"
-            strokeLinecap="round"
-          />
-        )}
+        {weekly && <path className="spark-week" d={weekly} fill="none" strokeWidth="1.2" strokeDasharray="3 3" strokeLinecap="round" />}
         {line && (
           <path
             className="spark-line"
             d={line}
             pathLength={1}
             fill="none"
-            stroke={color}
-            strokeWidth="1.9"
+            stroke={`url(#line-${gid})`}
+            strokeWidth="1.6"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
         )}
-        {last && (
-          <g>
-            <circle className="spark-halo" cx={last.x} cy={last.y} r="3.5" fill={color} />
-            <circle className="spark-dot" cx={last.x} cy={last.y} r="3.2" fill={color} stroke="var(--panel)" strokeWidth="1.6" />
-          </g>
-        )}
+        {last && <circle className="spark-dot" cx={last.x} cy={last.y} r="3.2" />}
         {hovered && (
           <g>
-            <line x1={hovered.x} x2={hovered.x} y1={0} y2={H} stroke="var(--text-3)" strokeWidth="1" opacity="0.5" />
-            <circle cx={hovered.x} cy={hovered.y} r="3" fill={color} stroke="var(--panel)" strokeWidth="1.5" />
+            <line className="spark-base" x1={hovered.x} x2={hovered.x} y1={0} y2={H} />
+            <circle className="spark-dot" cx={hovered.x} cy={hovered.y} r="3" />
           </g>
         )}
       </svg>
       {hovered && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: H + 4,
-            left: Math.min(Math.max(0, hovered.x - 70), w - 150),
-            width: 150,
-            padding: '5px 8px',
-            borderRadius: 8,
-            background: 'var(--panel)',
-            border: '1px solid var(--border)',
-            boxShadow: 'var(--shadow)',
-            fontSize: 11.5,
-            color: 'var(--text-2)',
-            pointerEvents: 'none',
-            textAlign: 'center',
-            zIndex: 2
-          }}
-        >
-          <div style={{ color: 'var(--text-3)' }}>{formatClock(hovered.t, tz, lang, now + 7 * DAY)}</div>
+        <div className="spark-tip" style={{ bottom: H + 6, left: Math.min(Math.max(0, hovered.x - 78), w - 156) }}>
+          <span>{formatClock(hovered.t, tz, lang, now + 7 * DAY)}</span>
           <div>
-            <b style={{ color: 'var(--text)' }}>{labels.fh}</b> {Math.round(hovered.v)}%
+            <b>{labels.fh}</b> {Math.round(hovered.v)}%
             {hovered.sd !== undefined && (
               <>
                 {' · '}
-                <b style={{ color: 'var(--text)' }}>{labels.sd}</b> {Math.round(hovered.sd)}%
+                <b>{labels.sd}</b> {Math.round(hovered.sd)}%
               </>
             )}
           </div>

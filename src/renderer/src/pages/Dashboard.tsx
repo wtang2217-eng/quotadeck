@@ -14,10 +14,12 @@ import {
   IconZap,
   Logo
 } from '../components/icons'
-import { PlanBadge, Spinner } from '../components/ui'
+import { PageHead, PlanBadge, SectionHead, Spinner } from '../components/ui'
 import { useApp } from '../context'
 import { play } from '../sound'
 import { displayName, errMessage, limitKindKey, shownRemaining } from '../util'
+
+const pad = (n: number) => String(n).padStart(2, '0')
 
 function LimitBanner() {
   const { state, t, lang, tz, now, openDialog } = useApp()
@@ -37,9 +39,10 @@ function LimitBanner() {
       return (
         <div className="banner banner-bad" role="status">
           <div className="banner-icon">
-            <IconZap size={20} />
+            <IconZap size={18} />
           </div>
           <div className="banner-text">
+            <span className="banner-kicker">{t('bannerKickerLimited')}</span>
             <div className="banner-title">{t('bannerLimited', { name: displayName(blocked), kind: t(limitKindKey(blocked.limit?.kind)) })}</div>
             <div className="banner-sub">
               {soonest ? t('bannerAllLimited', { clock: formatClock(soonest, tz, lang, now) }) : t('bannerAllLimitedNoTime')}
@@ -52,9 +55,10 @@ function LimitBanner() {
     return (
       <div className="banner banner-bad" role="status">
         <div className="banner-icon">
-          <IconZap size={20} />
+          <IconZap size={18} />
         </div>
         <div className="banner-text">
+          <span className="banner-kicker">{t('bannerKickerLimited')}</span>
           <div className="banner-title">
             {t('bannerLimited', { name: displayName(blocked), kind: t(limitKindKey(blocked.limit?.kind)) })}
             {resetsAt && resetsAt > now && <span className="pill-time">{t('bannerResetAt', { clock: formatClock(resetsAt, tz, lang, now) })}</span>}
@@ -67,7 +71,7 @@ function LimitBanner() {
         </div>
         <button
           type="button"
-          className="btn btn-primary"
+          className="btn btn-primary btn-lg"
           data-sound="none"
           onClick={() => openDialog({ type: 'switch', mode: 'both', fromAccountId: blocked.id, toAccountId: target.id })}
         >
@@ -86,9 +90,10 @@ function LimitBanner() {
     return (
       <div className="banner banner-warn" role="status">
         <div className="banner-icon">
-          <IconAlert size={20} />
+          <IconAlert size={18} />
         </div>
         <div className="banner-text">
+          <span className="banner-kicker">{t('bannerKickerWarn')}</span>
           <div className="banner-title">{t('bannerWarn', { name: displayName(current), kind: t(limitKindKey(kindWindow)), pct })}</div>
           {alt && <div className="banner-sub">{t('bannerWarnSub', { name: displayName(alt) })}</div>}
         </div>
@@ -109,7 +114,7 @@ function LimitBanner() {
   return null
 }
 
-function ConnectCard() {
+function ConnectCard({ index }: { index: number }) {
   const { state, t, api, setState, toast } = useApp()
   const [busy, setBusy] = useState(false)
   const integ = state.integration
@@ -131,40 +136,43 @@ function ConnectCard() {
   }
   const conflict = integ.statusLineConflict
   return (
-    <div className={`card connect${conflict ? ' top' : ''}`}>
-      <div className="connect-icon">
-        <IconPlug size={20} />
-      </div>
-      <div className="connect-text">
-        <div className="connect-title">{t('integrationTitle')}</div>
-        <div className="connect-body">{t('integrationBody')}</div>
-        {conflict && (
-          <div className="connect-body" style={{ marginTop: 8 }}>
-            {t('integrationConflict')}
-            <code className="conflict-cmd mono">{conflict}</code>
-            <div style={{ marginTop: 6 }}>{t('integrationConflictAsk')}</div>
-          </div>
-        )}
-      </div>
-      <div className="connect-actions">
-        {conflict ? (
-          <>
-            <button type="button" className="btn btn-sm" disabled={busy} onClick={() => install(false, false)}>
-              {t('integrationOnlyHooks')}
-            </button>
-            <button type="button" className="btn btn-sm btn-primary" disabled={busy} onClick={() => install(true, true)}>
+    <section className="sec">
+      <SectionHead index={index} title={t('secConnect')} />
+      <div className={`card connect${conflict ? ' top' : ''}`}>
+        <div className="connect-icon">
+          <IconPlug size={18} />
+        </div>
+        <div className="connect-text">
+          <div className="connect-title">{t('integrationTitle')}</div>
+          <div className="connect-body">{t('integrationBody')}</div>
+          {conflict && (
+            <div className="connect-body" style={{ marginTop: 8 }}>
+              {t('integrationConflict')}
+              <code className="conflict-cmd mono">{conflict}</code>
+              <div style={{ marginTop: 6 }}>{t('integrationConflictAsk')}</div>
+            </div>
+          )}
+        </div>
+        <div className="connect-actions">
+          {conflict ? (
+            <>
+              <button type="button" className="btn btn-sm" disabled={busy} onClick={() => install(false, false)}>
+                {t('integrationOnlyHooks')}
+              </button>
+              <button type="button" className="btn btn-sm btn-primary" disabled={busy} onClick={() => install(true, true)}>
+                {busy && <Spinner />}
+                {t('integrationReplace')}
+              </button>
+            </>
+          ) : (
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => install(true, false)}>
               {busy && <Spinner />}
-              {t('integrationReplace')}
+              {t('integrationInstall')}
             </button>
-          </>
-        ) : (
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => install(true, false)}>
-            {busy && <Spinner />}
-            {t('integrationInstall')}
-          </button>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -174,9 +182,10 @@ function CliMissing() {
   return (
     <div className="banner banner-info" role="status">
       <div className="banner-icon">
-        <IconTerminal size={20} />
+        <IconTerminal size={18} />
       </div>
       <div className="banner-text">
+        <span className="banner-kicker">{t('bannerKickerInfo')}</span>
         <div className="banner-title">{t('cliMissingTitle')}</div>
         <div className="banner-sub">{t('cliMissingBody')}</div>
       </div>
@@ -197,13 +206,13 @@ function FirstRun() {
         <div className="hero-art" aria-hidden="true">
           <HeroArt />
         </div>
-        <Logo size={52} />
+        <Logo size={48} />
         <h2 className="hero-title">{t('emptyTitle')}</h2>
         <ul className="hero-list">
           {(['emptyLine1', 'emptyLine2', 'emptyLine3'] as const).map((k) => (
             <li key={k}>
               <span className="tick">
-                <IconCheck size={14} stroke={2.4} />
+                <IconCheck size={12} stroke={2.6} />
               </span>
               {t(k)}
             </li>
@@ -219,7 +228,7 @@ function FirstRun() {
       {cand && (
         <div className="card candidate">
           <div className="connect-icon">
-            <IconUser size={20} />
+            <IconUser size={18} />
           </div>
           <div className="connect-text">
             <div className="connect-title" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -254,36 +263,62 @@ function FirstRun() {
   )
 }
 
-/** Decorative stacked cards for the first-run hero. */
+/** First-run figure: three meters on a hairline grid, one of them in the highlight color. */
 function HeroArt() {
+  const rows = [0.86, 0.42, 0.64]
   return (
-    <svg width="230" height="150" viewBox="0 0 230 150">
-      <defs>
-        <linearGradient id="hero-a" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#2dd4bf" />
-          <stop offset="0.55" stopColor="#8b5cf6" />
-          <stop offset="1" stopColor="#f9a8d4" />
-        </linearGradient>
-      </defs>
-      <g transform="rotate(-7 160 80)">
-        <rect x="88" y="22" width="130" height="92" rx="16" fill="var(--panel)" stroke="var(--border)" />
-        <rect x="104" y="40" width="40" height="8" rx="4" fill="var(--panel-3)" />
-        <rect x="104" y="62" width="96" height="6" rx="3" fill="var(--track)" />
-        <rect x="104" y="62" width="74" height="6" rx="3" fill="#f43f5e" opacity="0.85" />
-        <rect x="104" y="80" width="96" height="6" rx="3" fill="var(--track)" />
-        <rect x="104" y="80" width="50" height="6" rx="3" fill="#f59e0b" />
-      </g>
-      <g>
-        <rect x="18" y="38" width="140" height="100" rx="16" fill="var(--panel)" stroke="var(--border)" />
-        <circle cx="42" cy="62" r="11" fill="url(#hero-a)" />
-        <rect x="60" y="55" width="54" height="7" rx="3.5" fill="var(--text)" opacity="0.75" />
-        <rect x="60" y="66" width="38" height="5" rx="2.5" fill="var(--text-3)" opacity="0.6" />
-        <rect x="34" y="88" width="108" height="6" rx="3" fill="var(--track)" />
-        <rect x="34" y="88" width="30" height="6" rx="3" fill="url(#hero-a)" />
-        <rect x="34" y="106" width="108" height="6" rx="3" fill="var(--track)" />
-        <rect x="34" y="106" width="52" height="6" rx="3" fill="url(#hero-a)" />
-      </g>
+    <svg width="260" height="150" viewBox="0 0 260 150">
+      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+        <line key={i} x1={20 + i * 36} x2={20 + i * 36} y1="10" y2="140" stroke="var(--rule)" />
+      ))}
+      {rows.map((v, i) => (
+        <g key={i} transform={`translate(20 ${34 + i * 38})`}>
+          <rect width="216" height="6" fill="var(--track)" />
+          <rect width={216 * v} height="6" fill={i === 1 ? 'var(--accent)' : 'var(--ink)'} />
+          <text x="0" y="-8" fontFamily="var(--font-mono)" fontSize="9" letterSpacing="1" fill="var(--ink-3)">
+            {['5H', 'WEEK', 'MAX 5X'][i]}
+          </text>
+        </g>
+      ))}
     </svg>
+  )
+}
+
+function Facts() {
+  const { state, t } = useApp()
+  const accounts = state.accounts
+  const current = accounts.find((a) => a.isDesktopCurrent)
+  const available = accounts.filter((a) => a.status === 'ok' || a.status === 'warn').length
+  const limitedCount = accounts.filter((a) => a.status === 'limited').length
+  const desktopText = !state.desktop.found
+    ? t('sideDesktopNone')
+    : current
+      ? displayName(current)
+      : state.desktop.currentAccountUuid
+        ? t('sideDesktopUnknownAccount')
+        : t('sideDesktopIdle')
+  return (
+    <div className="facts">
+      <div className="fact">
+        <span className="label">{t('factAccounts')}</span>
+        <span className="fact-value num">{pad(accounts.length)}</span>
+      </div>
+      <div className="fact">
+        <span className="label">{t('factAvailable')}</span>
+        <span className="fact-value num">{pad(available)}</span>
+      </div>
+      <div className="fact">
+        <span className="label">{t('factLimited')}</span>
+        <span className={`fact-value num${limitedCount > 0 ? ' is-bad' : ''}`}>{pad(limitedCount)}</span>
+      </div>
+      <div className="fact">
+        <span className="label">{t('factDesktop')}</span>
+        <span className="fact-value is-text">
+          <span className={`dot-sm fact-mark ${current ? (current.status === 'limited' ? 'dot-bad' : 'dot-ok') : 'dot-muted'}`} />
+          <span className="ellipsis">{desktopText}</span>
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -291,9 +326,6 @@ export function Dashboard() {
   const { state, t, api, setState, toast, openDialog } = useApp()
   const [spinning, setSpinning] = useState(false)
   const accounts = state.accounts
-  const current = accounts.find((a) => a.isDesktopCurrent)
-  const available = accounts.filter((a) => a.status === 'ok' || a.status === 'warn').length
-  const limitedCount = accounts.filter((a) => a.status === 'limited').length
 
   const refresh = async () => {
     setSpinning(true)
@@ -315,48 +347,32 @@ export function Dashboard() {
 
   return (
     <div className="page">
-      <header className="page-head">
-        <div>
-          <h1 className="page-title">{t('dashTitle')}</h1>
-          {accounts.length > 0 && (
-            <div className="page-sub">
-              <span>{t('dashSubtitle', { count: accounts.length })}</span>
-              <span className="dot-sm dot-ok" style={{ marginLeft: 4 }} />
-              <span>{t('dashAvailable', { n: available })}</span>
-              {limitedCount > 0 && (
-                <>
-                  <span className="dot-sm dot-bad" style={{ marginLeft: 4 }} />
-                  <span>{t('dashLimitedCount', { n: limitedCount })}</span>
-                </>
-              )}
-              {current && (
-                <>
-                  <span style={{ opacity: 0.4 }}>·</span>
-                  <span>{t('dashCurrent', { name: displayName(current) })}</span>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="page-actions">
-          <button
-            type="button"
-            className={`icon-btn bordered${spinning ? ' spin-once' : ''}`}
-            aria-label={t('refresh')}
-            title={t('refresh')}
-            onClick={refresh}
-          >
-            <IconRefresh size={17} />
-          </button>
-          {accounts.length > 0 && (
-            <button type="button" className="btn btn-primary" data-sound="none" onClick={() => openDialog({ type: 'add' })}>
-              <IconPlus size={16} />
-              {t('addAccount')}
+      <PageHead
+        index={1}
+        kicker={t('kDashboard')}
+        title={t('dashTitle')}
+        actions={
+          <>
+            <button
+              type="button"
+              className={`icon-btn bordered${spinning ? ' spin-once' : ''}`}
+              aria-label={t('refresh')}
+              title={t('refresh')}
+              onClick={refresh}
+            >
+              <IconRefresh size={16} />
             </button>
-          )}
-        </div>
-      </header>
+            {accounts.length > 0 && (
+              <button type="button" className="btn btn-primary" data-sound="none" onClick={() => openDialog({ type: 'add' })}>
+                <IconPlus size={15} />
+                {t('addAccount')}
+              </button>
+            )}
+          </>
+        }
+      />
 
+      {accounts.length > 0 && <Facts />}
       <CliMissing />
 
       {accounts.length === 0 ? (
@@ -364,21 +380,24 @@ export function Dashboard() {
       ) : (
         <>
           <LimitBanner />
-          <div className="acct-grid">
-            {sorted.map((a) => (
-              <AccountCard key={a.id} account={a} />
-            ))}
-            <button type="button" className="add-tile" data-sound="none" onClick={() => openDialog({ type: 'add' })}>
-              <span className="add-tile-icon">
-                <IconPlus size={22} />
-              </span>
-              <span className="add-tile-title">{t('addTile')}</span>
-              <span className="add-tile-hint">{t('addTileHint')}</span>
-            </button>
-          </div>
+          <section className="sec">
+            <SectionHead index={1} title={t('secAccounts')} meta={t('secAccountsMeta')} />
+            <div className="acct-grid">
+              {sorted.map((a) => (
+                <AccountCard key={a.id} account={a} />
+              ))}
+              <button type="button" className="add-tile" data-sound="none" onClick={() => openDialog({ type: 'add' })}>
+                <span className="add-tile-icon">
+                  <IconPlus size={20} />
+                </span>
+                <span className="add-tile-title">{t('addTile')}</span>
+                <span className="add-tile-hint">{t('addTileHint')}</span>
+              </button>
+            </div>
+          </section>
         </>
       )}
-      <ConnectCard />
+      <ConnectCard index={2} />
     </div>
   )
 }

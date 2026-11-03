@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { formatAgo, formatClock, maskEmail } from '@shared/format'
 import type { AccountView, ConversationItem, DesktopSwitchResult } from '@shared/types'
 import { Dialog } from '../components/Dialog'
-import { IconAlert, IconArrowRight, IconCheck, IconInfo, IconMonitor, IconSwitch, IconTerminal } from '../components/icons'
+import { IconAlert, IconCheck, IconInfo, IconMonitor, IconSwitch, IconTerminal } from '../components/icons'
 import { Avatar, Check, PlanBadge, Spinner } from '../components/ui'
 import { useApp, type SwitchMode } from '../context'
 import { play } from '../sound'
@@ -150,7 +150,7 @@ export function SwitchDialog({
   const fromResetsAt = from?.limit?.resetsAt
 
   return (
-    <Dialog title={title} sub={t('switchSub')} icon={<IconSwitch size={18} />} wide={showA && showB} onClose={onClose}>
+    <Dialog title={title} kicker={t('kSwitch')} sub={t('switchSub')} icon={<IconSwitch size={18} />} wide={showA && showB} onClose={onClose}>
       {(close) =>
         targets.length === 0 ? (
           <div className="note-line" style={{ fontSize: 13 }}>
@@ -180,8 +180,8 @@ export function SwitchDialog({
                       </div>
                     </div>
                   </div>
-                  <div className="route-arrow">
-                    <IconArrowRight size={20} />
+                  <div className="route-arrow" aria-hidden="true">
+                    <span className="route-arrow-line" />
                   </div>
                 </>
               )}

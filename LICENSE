@@ -24,3 +24,11 @@ SOFTWARE.
 
 The UI sounds in src/renderer/src/assets/sounds were rendered from the earshot
 sound bank (https://github.com/Leonxlnx/earshot), MIT License.
+
+The app bundles these fonts, each under the SIL Open Font License 1.1
+(https://openfontlicense.org), through the Fontsource packages:
+- Inter, Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
+- JetBrains Mono, Copyright 2020 The JetBrains Mono Project Authors
+  (https://github.com/JetBrains/JetBrainsMono)
+- Playfair Display, Copyright 2017 The Playfair Display Project Authors
+  (https://github.com/clauseggers/Playfair-Display)

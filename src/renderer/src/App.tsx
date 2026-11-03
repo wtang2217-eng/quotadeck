@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { QuotaDeckApi } from '@shared/api'
 import type { AppState, Page } from '@shared/types'
-import { IconChat, IconCheck, IconGrid, IconInfo, IconPulse, IconShield, IconSliders, IconX, Logo } from './components/icons'
-import { Avatar } from './components/ui'
+import { IconCheck, IconInfo, IconX, Logo } from './components/icons'
 import { Ctx, type AppCtx, type DialogState, type ToastKind } from './context'
 import { EditAccountDialog, RemoveAccountDialog } from './dialogs/AccountDialogs'
 import { AddAccountDialog } from './dialogs/AddAccountDialog'
@@ -23,13 +22,20 @@ interface Toast {
   leaving?: boolean
 }
 
-const NAV: { page: Page; icon: (p: { size?: number }) => ReactNode; key: 'navDashboard' | 'navConversations' | 'navActivity' | 'navSettings' | 'navAbout' }[] = [
-  { page: 'dashboard', icon: IconGrid, key: 'navDashboard' },
-  { page: 'conversations', icon: IconChat, key: 'navConversations' },
-  { page: 'activity', icon: IconPulse, key: 'navActivity' },
-  { page: 'settings', icon: IconSliders, key: 'navSettings' },
-  { page: 'about', icon: IconShield, key: 'navAbout' }
+export const NAV: { page: Page; key: 'navDashboard' | 'navConversations' | 'navActivity' | 'navSettings' | 'navAbout' }[] = [
+  { page: 'dashboard', key: 'navDashboard' },
+  { page: 'conversations', key: 'navConversations' },
+  { page: 'activity', key: 'navActivity' },
+  { page: 'settings', key: 'navSettings' },
+  { page: 'about', key: 'navAbout' }
 ]
+
+/** Height of one sidebar index row, for the gliding marker. */
+const NAV_ROW = 38
+
+function platformName(p: string): 'mac' | 'win' | 'linux' {
+  return p === 'darwin' ? 'mac' : p === 'win32' ? 'win' : 'linux'
+}
 
 export function App({ api }: { api: QuotaDeckApi }) {
   const [state, setState] = useState<AppState | null>(null)
@@ -84,6 +90,18 @@ export function App({ api }: { api: QuotaDeckApi }) {
   useEffect(() => {
     if (settings) document.documentElement.lang = settings.language
   }, [settings?.language])
+
+  // Visual style and Swiss highlight color, plus the platform for window chrome spacing.
+  useEffect(() => {
+    if (!settings) return
+    const root = document.documentElement
+    root.dataset.style = settings.uiStyle ?? 'swiss'
+    root.dataset.accent = settings.accent ?? 'ikb'
+  }, [settings?.uiStyle, settings?.accent])
+
+  useEffect(() => {
+    if (state) document.documentElement.dataset.platform = platformName(state.platform)
+  }, [state?.platform])
 
   // Alert sounds for limit events that arrive while the app is open (never for events loaded at start).
   useEffect(() => {
@@ -167,31 +185,29 @@ export function App({ api }: { api: QuotaDeckApi }) {
     <Ctx.Provider value={ctx}>
       <div className="app">
         <aside className="sidebar">
+          <div className="strip drag" />
           <div className="brand">
-            <Logo size={36} />
-            <div style={{ minWidth: 0 }}>
+            <Logo size={30} />
+            <div className="brand-text">
               <div className="brand-name">QuotaDeck</div>
-              <div className="brand-tag">{t('appTagline')}</div>
+              <div className="brand-tag">{t('brandTag')}</div>
             </div>
           </div>
           <nav className="nav" aria-label="main">
-            <span className="nav-pill" style={{ transform: `translateY(${navIndex * 40}px)` }} />
-            {NAV.map((n) => {
-              const Icon = n.icon
-              return (
-                <button
-                  key={n.page}
-                  type="button"
-                  className={`nav-item${page === n.page ? ' active' : ''}`}
-                  aria-current={page === n.page ? 'page' : undefined}
-                  onClick={() => page !== n.page && navigate(n.page)}
-                >
-                  <Icon size={18} />
-                  <span>{t(n.key)}</span>
-                  {n.page === 'dashboard' && limitedCount > 0 && <span className="nav-count">{limitedCount}</span>}
-                </button>
-              )
-            })}
+            <span className="nav-mark" style={{ transform: `translateY(${navIndex * NAV_ROW}px)` }} />
+            {NAV.map((n, i) => (
+              <button
+                key={n.page}
+                type="button"
+                className={`nav-item${page === n.page ? ' active' : ''}`}
+                aria-current={page === n.page ? 'page' : undefined}
+                onClick={() => page !== n.page && navigate(n.page)}
+              >
+                <span className="nav-num">{String(i + 1).padStart(2, '0')}</span>
+                <span className="nav-label">{t(n.key)}</span>
+                {n.page === 'dashboard' && limitedCount > 0 && <span className="nav-count">{limitedCount}</span>}
+              </button>
+            ))}
           </nav>
           <div className="sidebar-foot">
             <div className="side-status">
@@ -205,7 +221,7 @@ export function App({ api }: { api: QuotaDeckApi }) {
                     </>
                   ) : current ? (
                     <>
-                      <Avatar account={current} size={18} />
+                      <span className={`dot-sm ${current.status === 'limited' ? 'dot-bad' : current.status === 'warn' ? 'dot-warn' : 'dot-ok'}`} />
                       <span className="ellipsis">{displayName(current)}</span>
                     </>
                   ) : state.desktop.currentAccountUuid ? (
@@ -237,6 +253,13 @@ export function App({ api }: { api: QuotaDeckApi }) {
         </aside>
 
         <main className="main" ref={mainRef}>
+          <div className="topbar drag">
+            <span>
+              <b>QuotaDeck</b> <i>/</i> {String(navIndex + 1).padStart(2, '0')} {t(NAV[navIndex]?.key ?? 'navDashboard')}
+            </span>
+            <span className="grow" />
+            <span className="topbar-meta">{t('topbarMeta')}</span>
+          </div>
           {page === 'dashboard' && <Dashboard />}
           {page === 'conversations' && <Conversations />}
           {page === 'activity' && <Activity />}
