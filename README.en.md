@@ -5,8 +5,8 @@
 <h1 align="center">QuotaDeck</h1>
 
 <p align="center">
-  <b>A multi-account panel for Claude Code</b>: see every account's plan and usage at a glance, switch with one click when one runs out, and keep your conversations<br>
-  Runs only on your computer · never touches your login credentials · unofficial
+  <b>A multi-account panel for Claude Code</b>: see what each account has left, how many tokens it used and what that would cost at API prices; switch with one click when one runs out, and keep your conversations<br>
+  Runs only on your computer · never touches sign-in credentials · Windows / macOS / Linux · unofficial
 </p>
 
 <p align="center">
@@ -16,90 +16,110 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/dashboard-en.png" width="860" alt="Dashboard">
+  <img src="docs/images/overview.en.png" width="880" alt="Overview">
 </p>
 
 ## What it does
 
-If you have more than one Claude account (say a Max and a Pro) and work in the **Claude desktop app's Code tab** or with `claude` in a terminal, you know these problems:
+If you have more than one Claude account and work in the **Code tab of the Claude desktop app** or with `claude` in a terminal, you know these problems:
 
-- You can't tell how much each account has left, or when it resets.
-- When one runs out you sign out and back in, **and the desktop conversation list "disappears"**.
-- To keep going with the conversation you were in, you dig through history by hand.
+- you can't tell which account has quota left, when it resets, or how much each one has used;
+- when one runs out you sign out and in again, and **the conversation list on the left "disappears"**;
+- to continue the conversation you were in, you have to dig it up yourself.
 
-QuotaDeck fixes exactly that:
+QuotaDeck takes care of them:
 
 | | |
 |---|---|
-| **Usage overview** | Plan (Pro / Max 5x / Max 20x…), 5-hour and weekly usage, reset times and a 7-day chart for every account |
-| **Alerts** | Notices at 80% / 95%, and a desktop notification the moment an account hits its limit, with the best account to switch to (remaining usage × plan size) |
-| **Continue in one click** | One click opens a terminal as another account **and resumes the conversation you were in**, optionally sending "continue" for you |
-| **Desktop switching without losing conversations** | Merges the Code tab conversation lists of your accounts, so after you sign in with another account the same projects and conversations are there |
-| **Every conversation in one place** | All accounts, desktop and terminal, searchable, resumable with any account |
-| **Terminal status line** | Shows the account and its live usage at the bottom of terminal Claude Code, and which account to switch to when it runs low |
-| **Tray** | The crescent in the tray icon shows the current account's state (green ok, amber low, red limit reached) |
-| **Click sounds** | Subtle sounds for buttons, toggles and alerts; switch them off or set the volume in Settings |
-
-Windows is fully supported (desktop app and terminal). On macOS and Linux the terminal features work too, and the desktop app's data folder is detected automatically.
+| **Quota at a glance** | Every account's plan (Pro / Max 5x / Max 20x…), 5-hour and weekly usage, reset times, and which account the desktop app is signed in to. A one-line tip says which account to use now |
+| **Usage ledger** | Tokens per account, day and model (input, output, cache writes, cache reads) and **what they would cost at Anthropic's official API prices**; today, this month and all time; by account, model or project; an activity heat map; CSV export. History is kept even after Claude Code deletes old transcripts |
+| **Run-out forecast and reset alerts** | "At this pace this account runs out around 21:40"; alerts at 80% / 95%; a heads-up when an account that ran out has reset |
+| **One click to keep working** | When an account runs out: continue the same conversation in a terminal with another account, or switch the desktop app — the conversation is copied to the other account's list first, QuotaDeck notices when you have signed in, tells you where the conversation is and puts the "continue" prompt on your clipboard |
+| **Tray popover and shortcut** | Click the tray icon for every account's quota in a small popover; `Ctrl+Shift+Q` (`⌘⇧Q` on macOS) opens the panel from anywhere; the macOS menu bar shows the current account's percentage |
+| **Conversations** | Every conversation from every account, desktop and terminal, in one list: search, filter by project or account, star, export to Markdown, continue with any account |
+| **One-click setup** | The first start checks your setup: installs the Claude Code CLI with the official installer if it is missing, finds the account you are signed in with, connects Claude Code — one button |
+| **Everything an app should have** | Splash screen, `Ctrl+K` search, notification center, light / dark, accent and density options, English and Chinese, click sounds (can be turned off), update check |
 
 <p align="center">
-  <img src="docs/images/dashboard-en-light.png" width="860" alt="Light theme">
+  <img src="docs/images/ledger.en.png" width="880" alt="Usage ledger">
+</p>
+
+<p align="center">
+  <img src="docs/images/switch.en.png" width="430" alt="Switch">
+  <img src="docs/images/overview-dark.en.png" width="430" alt="Dark theme">
 </p>
 
 ## Compliance (please read)
 
-Every design decision follows Claude Code's [Legal and compliance](https://code.claude.com/docs/en/legal-and-compliance) page and Anthropic's [Usage Policy](https://www.anthropic.com/legal/aup):
+Every design decision follows [Claude Code's legal and compliance notes](https://code.claude.com/docs/en/legal-and-compliance) and the [Anthropic Usage Policy](https://www.anthropic.com/legal/aup):
 
-- **It runs only on your computer.** No server, nothing is uploaded. Its small built-in server listens on `127.0.0.1` only.
-- **Only your own accounts.** Lending accounts, using someone else's, account pools, relays and carpooling violate Anthropic's terms. QuotaDeck has no such features and does not support such use.
-- **It never touches login credentials.** QuotaDeck never reads, copies, stores or uploads tokens or cookies. The terms say developers "may not collect, store, or intermediate Claude.ai credentials or session tokens — sign-in to a Claude account must complete through Anthropic's own flow". Adding an account therefore opens Claude Code's own `claude auth login` page, and Claude Code keeps the sign-in in its own folder.
-- **Usage numbers without API calls.** Only data Claude Code and the desktop app write on your computer is read: the status line's usage data, the desktop app's local usage history, and the limit events. Your login is never used to call any API.
-- **Every switch needs your click.** There is no unattended rotation.
-- **Desktop sign-in is yours to do.** The desktop app holds one account at a time; switching means signing out and in (about 15 seconds). Switching without signing in would require storing your credentials, which the terms forbid.
-- **Conversation merging is unofficial.** It copies conversation list files inside the desktop app's data folder: copy only, nothing deleted, backed up first, undoable. A major desktop update may break it. Chat and Cowork histories are not touched.
+- **Runs only on your computer.** No server, nothing uploaded. Its small local service listens on `127.0.0.1` only. The one network call is the update check against GitHub, which you can turn off.
+- **Only your own accounts.** Lending accounts, using someone else's, account pools, relays and shared plans break Anthropic's terms. QuotaDeck offers none of that and does not support such use.
+- **Never touches credentials.** QuotaDeck never reads, copies, stores or uploads your tokens or cookies. The official notes say third-party developers "may not collect, store, or intermediate Claude.ai credentials", and sign-in must go through Anthropic's own flow. Adding an account therefore opens Claude Code's official `claude auth login` page, where you sign in the way you always do (Google, email code, …); Claude Code keeps that sign-in in its own folder.
+- **No API calls for quota numbers.** Only data that Claude Code and the desktop app write on your computer is read: the quota the terminal status line receives, the desktop app's local usage records, token counts in transcripts, and the event fired when a limit is hit. Your sign-in is never used to call anything.
+- **Every switch is your click.** There is no unattended rotation.
+- **You sign in to the desktop app yourself.** The desktop app holds one sign-in at a time and has no account switcher. Switching without signing in would mean storing your credentials, which the terms forbid, so a desktop switch needs an official sign-in (about 15 seconds). In the terminal, Claude Code keeps each account's sign-in, so switching needs none.
+- **The conversation merge is unofficial.** It copies conversation list files inside the desktop app's data folder: copy only, never delete, back up first, undo any time. A major desktop update may break it. Chat and Cowork data are never touched.
+- **Dollar amounts are for reference.** They show what the tokens would cost at API list prices. Subscriptions are billed by plan, not by this number.
 
-One **grey area** is yours to judge: the terms set no limit on how many accounts a person has, and the docs show how to stay signed in to several. But the usage policy forbids intentionally bypassing product restrictions, and plan limits assume ordinary individual use. Switching from account A to B when A runs out is not explicitly forbidden, but registering accounts just for more usage, or rotating 24/7, may well be treated as bypassing limits and risks a ban. The officially supported way to keep going is [usage credits](https://code.claude.com/docs/en/costs#add-usage-credits-to-your-subscription) or a higher plan.
+There is a **grey area** you have to judge for yourself: the terms do not limit how many accounts one person may have, but the usage policy forbids intentionally circumventing product limits, and plan quotas assume ordinary individual use. Moving to account B when account A runs out is not explicitly forbidden; creating accounts to get more quota, or rotating them around the clock, is likely to be seen as circumvention and risks a ban. The officially supported way to keep going is [usage credits](https://code.claude.com/docs/en/costs#add-usage-credits-to-your-subscription) or a bigger plan.
 
 ## Install
 
-1. Install [Claude Code](https://code.claude.com/docs/en/setup) so that `claude` runs in a terminal.
-2. Download from [Releases](https://github.com/wtang2217-eng/quotadeck/releases/latest): `QuotaDeck-x.y.z-setup.exe` or `-portable.exe` on Windows, `.dmg` on macOS, `.AppImage` / `.deb` on Linux.
-3. The builds are not code-signed: on Windows choose "More info → Run anyway"; on macOS right-click → Open the first time.
+Download from [Releases](https://github.com/wtang2217-eng/quotadeck/releases/latest):
 
-## Usage
+| System | File | First start |
+|---|---|---|
+| Windows 10 / 11 | `QuotaDeck-x.y.z-setup.exe` (installer) or `QuotaDeck-x.y.z-portable.exe` | The installers are not code-signed: on "Windows protected your PC" click "More info → Run anyway" |
+| macOS | `QuotaDeck-x.y.z-mac-universal.dmg` (Apple silicon and Intel) | Drag it to Applications. If macOS blocks the first start, open System Settings → Privacy & Security and click "Open Anyway" |
+| Linux | `.AppImage` or `.deb` | `chmod +x` the AppImage, then run it |
 
-1. **Add accounts**: click "Add account", confirm it is your own, and sign in on Claude's official page in the browser (Google, email code or any method the account uses). The account already signed in at the terminal can be added with one click. Claude Code renews the sign-in itself; QuotaDeck tells you if one needs signing in again.
-2. **Connect to Claude Code** (recommended): QuotaDeck adds two entries to `~/.claude/settings.json` — a hook that tells it when a session hits a limit, and the status line. Nothing else is changed, a backup is made first, and Settings can remove both.
-3. **When an account runs out**: click the notification, then either **continue in a terminal** with the recommended account (the conversation is resumed), or **switch the desktop app**: QuotaDeck copies your conversations into the target account's list and walks you through signing in; then open the same conversation in the sidebar and carry on.
+The first start opens **one-click setup**: it checks the desktop app, the Claude Code CLI and your signed-in account, and fixes what is missing with one click.
+
+## How to use
+
+1. **Add accounts**: click "Add account", confirm it is your own, and sign in on Claude's official page in the browser. The account already signed in at the terminal can be added with one click. Claude Code renews sign-ins itself; QuotaDeck tells you if one needs signing in again.
+2. **Connect Claude Code** (part of the setup): QuotaDeck adds two entries to `~/.claude/settings.json` — a hook that tells the panel when a limit is hit, and the terminal status line. Nothing else changes, a backup is made first, and the settings page undoes it with one click.
+3. **When an account runs out**: click "Switch" in the notification and choose
+   - **Continue in a terminal**: opens a terminal with the suggested account on the same conversation;
+   - **Switch the desktop app**: the conversation is copied to the other account's list, then you sign out and in. QuotaDeck notices, puts the "continue" prompt on your clipboard, and you open the same conversation on the left and paste.
+4. **Read the ledger**: "Usage ledger" on the left. The scope switcher at the top left shows a single account.
 
 ## FAQ
 
-**Can this get me banned?** The tool itself does nothing the terms explicitly forbid. The remaining risk comes from relaying work across accounts itself; see the grey area above.
+**Can this get my account banned?** The tool does nothing the terms forbid. The remaining risk comes from relaying between accounts itself; see the grey area above.
 
-**Where is my data?** QuotaDeck's own data is in `~/.quotadeck/` (account list, settings, backups; no credentials). Each extra account's Claude Code configuration is in `~/.quotadeck/profiles/<id>/`; that folder contains Claude Code's own sign-in, so treat it like a password.
+**Do the dollar amounts match the official prices?** Every price was checked against [Anthropic's price page](https://platform.claude.com/docs/en/about-claude/pricing) (cache writes and reads, fast mode, Haiku's long-prompt tier, web search and US-only inference follow the official rules), and the panel shows the date of the price list. Claude Code also records its own cost in the transcript; on real data, 52 of the 57 complete conversations match it to the cent. The rest differ because Claude Code still prices Sonnet 5.5 cache reads at the old $0.20 (the official price is $0.10, which the ledger uses), or because a resumed conversation only records its last run. Requests Claude Code makes in the background (compacting context, titles, web search) are not in the transcript; the ledger adds them from Claude Code's own totals and shows them as "Background requests".
 
-**How is history shared?** Terminal: each account has its own configuration folder (Claude Code's documented `CLAUDE_CONFIG_DIR` method), and QuotaDeck links history, settings, CLAUDE.md, skills and more back to the main folder. Desktop: see conversation merging above.
+**What is "Old account" in the ledger?** An account that was used on this computer but is not in the panel. Its usage gets its own row so the totals add up; you can rename it, for example to its email.
 
-**Uninstall?** Click "Disconnect from Claude Code" in Settings first, then uninstall. Delete `~/.quotadeck/` for a clean slate.
+**Where is my data?** QuotaDeck's own data is in `~/.quotadeck/`: accounts, settings, the ledger and backups — no credentials. Each extra account's Claude Code configuration is in `~/.quotadeck/profiles/<id>/`; that folder contains the sign-in Claude Code saved, so treat it like a password.
+
+**How are conversations shared between accounts?** Terminal: each account has its own configuration folder (Claude Code's `CLAUDE_CONFIG_DIR`), and QuotaDeck links transcripts, settings, CLAUDE.md, skills and so on to the main folder, so every account sees the same ones. Desktop: see the conversation merge above.
+
+**How do I uninstall?** Click "Disconnect Claude Code" in the settings (removes the hook and status line), then uninstall; delete `~/.quotadeck/` to remove everything.
 
 ## Build from source
 
 ```bash
 npm install
 npm run dev          # development
-npm run dev:demo     # demo data, never reads your real accounts
+npm run dev:demo     # demo data, your real accounts are not read
 npm test             # unit tests
-npm run smoke        # run the core against your real data (read-only)
-npm run dist         # Windows installer
+npm run smoke        # the core logic against your real data (read-only)
+npm run dist         # Windows installers (dist:mac / dist:linux for the others)
 ```
+
+`src/main/core` holds the Electron-free logic (accounts, quota, ledger, merge, hooks, terminal launch), `src/main` the tray, notifications and windows, `src/renderer` the UI, and `src/shared` the shared types. Every push to a `ci/**` branch builds the installers on Windows, macOS and Linux and starts the packaged app to take screenshots.
 
 ## Credits
 
-- UI sounds are rendered from the [earshot](https://github.com/Leonxlnx/earshot) sound bank (MIT); see `scripts/sounds.json`.
+- UI sounds are rendered from the [earshot](https://github.com/Leonxlnx/earshot) (MIT) library; see `scripts/sounds.json`.
+- [Inter](https://rsms.me/inter/) (OFL) and [Lucide](https://lucide.dev) icons (ISC).
 - Inspired by [claude-swap](https://github.com/realiti4/claude-swap) (MIT), with a different approach: it stores and swaps credentials, QuotaDeck never touches them.
 
 ## Disclaimer
 
-QuotaDeck is an unofficial community tool, not affiliated with or endorsed by Anthropic. Claude and Claude Code are trademarks of Anthropic. Use at your own risk.
+QuotaDeck is an unofficial community tool, not affiliated with or endorsed by Anthropic. Claude and Claude Code are trademarks of Anthropic. You use it at your own risk.
 
 [MIT License](LICENSE)
