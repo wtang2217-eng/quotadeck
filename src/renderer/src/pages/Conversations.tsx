@@ -1,222 +1,202 @@
+// Conversations: search and filter every Claude Code conversation on this computer, star, export, continue.
+
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatAgo, formatDateTime } from '@shared/format'
-import type { AccountView, ConversationItem } from '@shared/types'
-import { IconChat, IconChevronDown, IconCopy, IconFolder, IconMonitor, IconSearch, IconTerminal, IconX } from '../components/icons'
-import { Menu } from '../components/Menu'
-import { Avatar, Empty, Segmented, Spinner } from '../components/ui'
+import type { AccountView, ConversationItem, ProjectItem } from '@shared/types'
+import { IconChat, IconCopy, IconDownload, IconFolder, IconMonitor, IconMore, IconSearch, IconStar, IconTerminal, IconX } from '../components/icons'
+import { Menu, type MenuEntry } from '../components/Menu'
+import { Empty, Segmented, Spinner } from '../components/ui'
 import { useApp } from '../context'
 import { play } from '../sound'
-import { displayName, errMessage } from '../util'
+import { displayName, errMessage, shortName } from '../util'
 
-type Filter = 'all' | 'desktop' | 'terminal'
-
-function ContinueButton({ item, accounts, preferred }: { item: ConversationItem; accounts: AccountView[]; preferred?: AccountView }) {
-  const { t, api, toast, state } = useApp()
-  const usable = accounts.filter((a) => a.cliConfigDir)
-  const go = async (a: AccountView) => {
-    try {
-      const res = await api.continueInTerminal({ accountId: a.id, cliSessionId: item.cliSessionId, cwd: item.cwd })
-      if (res.ok) {
-        play('switch')
-        toast(t('convOpened', { name: displayName(a) }), 'ok')
-      } else {
-        play('error')
-        toast(t('errGeneric', { msg: res.error ?? '' }), 'bad')
-      }
-    } catch (e) {
-      play('error')
-      toast(t('errGeneric', { msg: errMessage(e) }), 'bad')
-    }
-  }
-  if (!usable.length) {
-    return (
-      <button type="button" className="btn btn-sm" disabled title={t('convNoCliAccount')}>
-        <IconTerminal size={15} />
-        {t('convContinue')}
-      </button>
-    )
-  }
-  const main = preferred && preferred.cliConfigDir ? preferred : usable[0]
-  return (
-    <div className="split">
-      <button type="button" className="btn btn-sm" title={t('convContinueWith', { name: displayName(main) })} onClick={() => go(main)} data-sound="none">
-        <IconTerminal size={15} />
-        {t('convContinue')}
-      </button>
-      <Menu
-        label={t('convChooseAccount')}
-        items={[
-          { heading: t('convChooseAccount') },
-          ...usable.map((a) => ({
-            label: displayName(a),
-            icon: <Avatar account={a} size={20} />,
-            sub: a.status === 'limited' ? t('statusLimited') : a.id === state.recommendedAccountId ? t('badgeRecommended') : undefined,
-            onSelect: () => void go(a)
-          }))
-        ]}
-        trigger={({ toggle }) => (
-          <button type="button" className="btn btn-sm" aria-label={t('convChooseAccount')} onClick={toggle}>
-            <IconChevronDown size={14} />
-          </button>
-        )}
-      />
-    </div>
-  )
-}
+type Entry = 'all' | 'desktop' | 'terminal'
 
 export function Conversations() {
-  const { state, t, api, lang, tz, now, toast } = useApp()
+  const { state, t, api, lang, tz, now, toast, scope, openDialog } = useApp()
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<Filter>('all')
+  const [entry, setEntry] = useState<Entry>('all')
+  const [cwd, setCwd] = useState('')
+  const [account, setAccount] = useState(scope === 'all' ? '' : scope)
+  const [favOnly, setFavOnly] = useState(false)
   const [items, setItems] = useState<ConversationItem[] | null>(null)
+  const [projects, setProjects] = useState<ProjectItem[]>([])
   const seq = useRef(0)
 
+  useEffect(() => setAccount(scope === 'all' ? '' : scope), [scope])
   useEffect(() => {
+    api.listProjects().then(setProjects).catch(() => undefined)
+  }, [api])
+
+  const reload = () => {
     const id = ++seq.current
-    const handle = window.setTimeout(
-      () => {
-        api
-          .listConversations({ search: query.trim() || undefined, limit: 300 })
-          .then((list) => {
-            if (id === seq.current) setItems(list)
-          })
-          .catch(() => id === seq.current && setItems([]))
-      },
-      query ? 180 : 0
-    )
-    return () => window.clearTimeout(handle)
-  }, [api, query])
+    api
+      .listConversations({
+        search: query.trim() || undefined,
+        limit: 300,
+        cwd: cwd || undefined,
+        accountId: account || undefined,
+        entrypoint: entry === 'all' ? undefined : entry,
+        favoritesOnly: favOnly || undefined
+      })
+      .then((list) => id === seq.current && setItems(list))
+      .catch(() => id === seq.current && setItems([]))
+  }
+  useEffect(() => {
+    const h = window.setTimeout(reload, query ? 180 : 0)
+    return () => window.clearTimeout(h)
+  }, [api, query, entry, cwd, account, favOnly])
 
-  const shown = useMemo(() => {
-    const list = items ?? []
-    const filtered = list.filter((c) =>
-      filter === 'all' ? true : filter === 'desktop' ? c.entrypoint === 'claude-desktop' : c.entrypoint !== 'claude-desktop'
-    )
-    return [...filtered].sort((a, b) => b.lastActivityAt - a.lastActivityAt)
-  }, [items, filter])
+  const current = state.accounts.find((a) => a.isDesktopCurrent)
+  const byId = useMemo(() => new Map(state.accounts.map((a) => [a.id, a])), [state.accounts])
 
-  const byId = new Map(state.accounts.map((a) => [a.id, a]))
-  const preferred = state.accounts.find((a) => a.id === state.recommendedAccountId)
-
-  const copyResume = async (c: ConversationItem) => {
-    try {
-      await api.copyText(`claude --resume ${c.cliSessionId}`)
-      play('copy')
-      toast(t('copied'), 'ok')
-    } catch (e) {
-      play('error')
-      toast(t('errGeneric', { msg: errMessage(e) }), 'bad')
-    }
+  const toggleFav = async (c: ConversationItem) => {
+    setItems((list) => list?.map((x) => (x.cliSessionId === c.cliSessionId ? { ...x, favorite: !c.favorite } : x)) ?? null)
+    await api.setFavorite(c.cliSessionId, !c.favorite).catch(() => reload())
+    play(c.favorite ? 'toggleOff' : 'toggleOn')
+  }
+  const exportMd = async (c: ConversationItem) => {
+    const res = await api.exportConversation(c.cliSessionId).catch((e) => ({ ok: false, error: errMessage(e), cancelled: false, path: undefined }))
+    if (res.cancelled) return
+    if (res.ok) toast(t('convExported', { path: res.path ?? '' }), 'ok')
+    else toast(t('errGeneric', { msg: res.error ?? '' }), 'bad')
+  }
+  const openDesktop = async (c: ConversationItem) => {
+    const res = await api.openInDesktop({ desktopSessionId: c.desktopSessionId, cliSessionId: c.cliSessionId }).catch((e) => ({ ok: false, error: errMessage(e) }))
+    if (res.ok) play('switch')
+    else toast(t('errGeneric', { msg: res.error ?? '' }), 'bad')
+  }
+  const inTerminal = async (c: ConversationItem, a: AccountView) => {
+    const res = await api.continueInTerminal({ accountId: a.id, cliSessionId: c.cliSessionId, cwd: c.cwd }).catch((e) => ({ ok: false, error: errMessage(e) }))
+    if (res.ok) {
+      play('switch')
+      toast(t('convOpened', { name: displayName(a) }), 'ok')
+    } else toast(t('errGeneric', { msg: res.error ?? '' }), 'bad')
+  }
+  /** Continue: in the desktop app when it can open this conversation with a usable account, else pick how in the switch dialog. */
+  const resume = (c: ConversationItem) => {
+    if (c.desktopSessionId && current && current.status !== 'limited') void openDesktop(c)
+    else openDialog({ type: 'switch', mode: 'both', cliSessionId: c.cliSessionId, cwd: c.cwd, title: c.title })
   }
 
   return (
     <div className="page">
       <header className="page-head">
-        <div>
+        <div className="page-head-text">
           <h1 className="page-title">{t('convTitle')}</h1>
-          <div className="page-sub">{t('convSubtitle')}</div>
+          <p className="page-sub">{t('convSubtitle')}</p>
         </div>
       </header>
 
-      <div className="toolbar">
-        <div className="search">
-          <IconSearch size={16} />
-          <input
-            className="input"
-            value={query}
-            placeholder={t('convSearch')}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label={t('convSearch')}
-          />
+      <div className="filters">
+        <label className="search-box">
+          <IconSearch size={15} />
+          <input className="search-input" value={query} placeholder={t('convSearch')} onChange={(e) => setQuery(e.target.value)} />
           {query && (
-            <button type="button" className="icon-btn clear" aria-label={t('close')} onClick={() => setQuery('')}>
+            <button type="button" className="icon-btn" aria-label={t('close')} onClick={() => setQuery('')}>
               <IconX size={14} />
             </button>
           )}
-        </div>
-        <Segmented<Filter>
-          ariaLabel={t('convTitle')}
-          value={filter}
-          onChange={(v) => setFilter(v)}
+        </label>
+        <Segmented<Entry>
+          ariaLabel={t('convFilterAll')}
+          value={entry}
+          onChange={(v) => setEntry(v)}
           options={[
             { value: 'all', label: t('convFilterAll') },
-            { value: 'desktop', label: t('convFilterDesktop') },
-            { value: 'terminal', label: t('convFilterTerminal') }
+            { value: 'desktop', label: t('convEntryDesktop') },
+            { value: 'terminal', label: t('convEntryTerminal') }
           ]}
         />
-        {items && <span className="count">{t('convCount', { n: shown.length })}</span>}
+        <select className="select" value={cwd} onChange={(e) => setCwd(e.target.value)} aria-label={t('colProject')}>
+          <option value="">{t('convAllProjects')}</option>
+          {projects
+            .filter((p) => p.cwd)
+            .map((p) => (
+              <option key={p.projectDir} value={p.cwd}>
+                {p.name} · {p.conversations}
+              </option>
+            ))}
+        </select>
+        <select className="select" value={account} onChange={(e) => setAccount(e.target.value)} aria-label={t('colAccount')}>
+          <option value="">{t('lgAllAccounts')}</option>
+          {state.accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {displayName(a)}
+            </option>
+          ))}
+        </select>
+        <button type="button" className={`btn btn-sm${favOnly ? ' is-on' : ''}`} aria-pressed={favOnly} onClick={() => setFavOnly((v) => !v)}>
+          <IconStar size={14} />
+          {t('convFavorites')}
+        </button>
+        <span className="grow" />
+        {items && <span className="sec-sub">{t('convCount', { n: items.length })}</span>}
       </div>
 
       {items === null ? (
-        <div className="card empty">
+        <div className="empty">
           <Spinner />
         </div>
-      ) : shown.length === 0 ? (
-        <div className="card">
-          {query ? (
-            <Empty icon={<IconSearch size={24} />} title={t('convEmpty')} hint={t('convEmptyHint')} />
-          ) : (
-            <Empty icon={<IconChat size={24} />} title={t('convEmptyAll')} hint={t('convEmptyAllHint')} />
-          )}
-        </div>
+      ) : items.length === 0 ? (
+        <Empty icon={<IconChat size={20} />} title={query || cwd || account || favOnly || entry !== 'all' ? t('convEmpty') : t('convEmptyAll')} hint={query ? t('convEmptyHint') : t('convEmptyAllHint')} />
       ) : (
-        <div className="card list">
-          {shown.map((c, i) => {
-            const desktop = c.entrypoint === 'claude-desktop'
-            const inLists = c.desktopAccountIds.map((id) => byId.get(id)).filter((a): a is AccountView => !!a)
+        <div className="list-rows conv-list">
+          {items.map((c) => {
+            const names = c.accountIds.map((id) => byId.get(id)).filter((a): a is AccountView => !!a)
+            const usable = state.accounts.filter((a) => a.cliConfigDir)
+            const menu: MenuEntry[] = [
+              ...(c.desktopSessionId ? [{ label: t('convOpenDesktop'), icon: <IconMonitor />, onSelect: () => void openDesktop(c) }] : []),
+              ...(usable.length ? [{ heading: t('convChooseAccount') } as MenuEntry] : []),
+              ...usable.map((a) => ({ label: displayName(a), icon: <IconTerminal />, sub: a.status === 'limited' ? t('statusLimited') : undefined, onSelect: () => void inTerminal(c, a) })),
+              'sep',
+              { label: t('convExport'), icon: <IconDownload />, onSelect: () => void exportMd(c) },
+              ...(c.cwd ? [{ label: t('convOpenFolder'), icon: <IconFolder />, onSelect: () => void api.openPath(c.cwd!) }] : []),
+              { label: t('convCopyResume'), icon: <IconCopy />, onSelect: () => void api.copyText(`claude --resume ${c.cliSessionId}`).then(() => toast(t('copied'), 'ok')) }
+            ]
             return (
-              <div className="row" key={c.cliSessionId} style={{ animationDelay: `${Math.min(i, 12) * 18}ms` }}>
-                <div className={`row-icon${desktop ? ' desktop' : ''}`}>{desktop ? <IconMonitor size={17} /> : <IconTerminal size={17} />}</div>
-                <div className="row-main">
-                  <div className="row-title ellipsis" title={c.firstPrompt || c.title}>
+              <div key={c.cliSessionId} className="list-row conv-row">
+                <button type="button" className={`icon-btn star${c.favorite ? ' on' : ''}`} aria-pressed={c.favorite} aria-label={c.favorite ? t('convUnfavorite') : t('convFavorite')} title={c.favorite ? t('convUnfavorite') : t('convFavorite')} onClick={() => void toggleFav(c)}>
+                  <IconStar size={15} />
+                </button>
+                <div style={{ minWidth: 0 }}>
+                  <div className="list-title" title={c.firstPrompt}>
                     {c.title}
                   </div>
-                  <div className="row-meta">
-                    <span className={`badge ${desktop ? 'badge-accent' : 'badge-outline'}`} style={{ height: 19, fontSize: 11 }}>
-                      {desktop ? t('convEntryDesktop') : c.entrypoint === 'cli' || !c.entrypoint ? t('convEntryTerminal') : t('convEntryOther')}
-                    </span>
-                    <span className="ellipsis mono" title={c.cwd} style={{ fontSize: 11.5 }}>
-                      {c.cwd || c.projectDir}
-                    </span>
+                  <div className="list-meta">
+                    <span>{c.entrypoint === 'claude-desktop' ? t('convEntryDesktop') : t('convEntryTerminal')}</span>
+                    {c.cwd && (
+                      <>
+                        <span className="sep" />
+                        <span className="ellipsis" title={c.cwd}>
+                          {c.cwd.split(/[\\/]/).filter(Boolean).pop()}
+                        </span>
+                      </>
+                    )}
+                    {names.length > 0 && (
+                      <>
+                        <span className="sep" />
+                        <span title={names.map(displayName).join(', ')}>{names.map(shortName).join(', ')}</span>
+                      </>
+                    )}
                     <span className="sep" />
-                    <span style={{ flex: 'none' }}>{t('convLines', { n: c.lines })}</span>
+                    <span title={formatDateTime(c.lastActivityAt, tz, lang)}>{formatAgo(c.lastActivityAt, lang, now)}</span>
                   </div>
                 </div>
-                <div className="row-side">
-                  {inLists.length > 0 && (
-                    <span className="stack" title={t('convInLists', { names: inLists.map(displayName).join('、') })}>
-                      {inLists.slice(0, 4).map((a) => (
-                        <Avatar key={a.id} account={a} size={22} />
-                      ))}
-                    </span>
-                  )}
-                  <span className="row-time" title={formatDateTime(c.lastActivityAt, tz, lang)}>
-                    {formatAgo(c.lastActivityAt, lang, now)}
-                  </span>
-                  <ContinueButton item={c} accounts={state.accounts} preferred={preferred} />
-                  <div className="row-actions">
-                    {c.cwd && (
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        aria-label={t('convOpenFolder')}
-                        title={t('convOpenFolder')}
-                        onClick={() => void api.openPath(c.cwd!).catch(() => undefined)}
-                      >
-                        <IconFolder size={16} />
+                <div className="dt-actions">
+                  <button type="button" className="btn btn-sm" data-sound="none" onClick={() => resume(c)}>
+                    {t('actResume')}
+                  </button>
+                  <Menu
+                    label={t('more')}
+                    items={menu}
+                    width={240}
+                    trigger={({ toggle }) => (
+                      <button type="button" className="icon-btn" aria-label={t('more')} onClick={toggle}>
+                        <IconMore />
                       </button>
                     )}
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      aria-label={t('convCopyResume')}
-                      title={t('convCopyResume')}
-                      data-sound="none"
-                      onClick={() => void copyResume(c)}
-                    >
-                      <IconCopy size={16} />
-                    </button>
-                  </div>
+                  />
                 </div>
               </div>
             )

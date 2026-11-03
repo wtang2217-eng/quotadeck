@@ -984,3 +984,60 @@
   padding: 8px 10px;
   border-top: 1px solid var(--line);
 }
+
+/* ---------- Conversations ---------- */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 260px;
+  height: var(--ctl-h);
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  color: var(--text-3);
+  transition:
+    border-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+.search-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+.search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: var(--text-1);
+  font-size: 13px;
+  outline: none;
+}
+.search-input:focus-visible {
+  box-shadow: none;
+}
+.search-input::placeholder {
+  color: var(--text-4);
+}
+.btn.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.btn.is-on svg {
+  color: currentColor;
+}
+.conv-row {
+  min-height: 56px;
+}
+.star {
+  color: var(--text-4);
+}
+.star.on {
+  color: var(--warn);
+}
+.star.on svg {
+  fill: currentColor;
+}
