@@ -11,12 +11,16 @@ import type { UsageEstimate } from '@shared/types'
 import type { UsageSample } from './desktop'
 import { readJson, writeJsonAtomic } from './jsonfile'
 import { projectsDir, qdPaths, safeReaddir } from './paths'
+import { costOf, tokensOf } from './pricing'
 
 const MIN = 60_000
 const HOUR = 60 * MIN
 const DAY = 24 * HOUR
 const WINDOW = 5 * HOUR
+/** Single replies are kept for a week (the estimate needs no more). */
 const KEEP = 7 * DAY
+/** Hourly totals for the statistics page are kept a little longer than its 30-day range. */
+export const STATS_KEEP = 31 * DAY
 const CHUNK = 1024 * 1024
 
 export interface UsageEvent {
@@ -58,13 +62,44 @@ export function unitsOf(usage: Usage, model: string | undefined): number {
 
 // ---------------------------------------------------------------------------------------------- scanning
 
+/** Replies of one conversation and model within one hour, for the statistics page. */
+export interface UsageBucket {
+  /** Start of the hour. */
+  h: number
+  /** Claude Code session id. */
+  s: string
+  /** Model id. */
+  m: string
+  e?: 'd' | 'c'
+  /** Organization the desktop app was signed in with when the replies were written. */
+  g?: string
+  /** Units, replies, then tokens: input, output, cache read, cache write; then list-price cost in US dollars. */
+  u: number
+  n: number
+  i: number
+  o: number
+  r: number
+  w: number
+  c: number
+  /** Time of the last reply. */
+  t: number
+}
+
 interface ScanState {
-  version: 1
+  version: 2
   cursors: Record<string, { size: number }>
   events: UsageEvent[]
   /** Reply ids already counted (one reply spans several transcript lines), with their time for pruning. */
   seen: Record<string, number>
+  buckets: Record<string, UsageBucket>
+  /** Project folder (under ~/.claude/projects) of each session. */
+  projects: Record<string, string>
+  /** Every transcript was read at least once. */
+  complete?: boolean
 }
+
+/** Desktop organization signed in at a given time, from the app's usage samples. */
+export type OrgAt = (t: number) => string | undefined
 
 function splitLines(buf: Buffer): Buffer[] {
   const out: Buffer[] = []
@@ -107,14 +142,35 @@ export class UsageScanner {
   private busy = false
   private lastSave = 0
   private dirty = false
+  private orgAt?: OrgAt
+  /** Bumped whenever new replies were counted, so derived results can be cached. */
+  revision = 0
 
   constructor(private readonly file = path.join(qdPaths().root, 'usage-scan.json')) {
     const saved = readJson<ScanState>(file)
-    this.state = saved?.version === 1 ? saved : { version: 1, cursors: {}, events: [], seen: {} }
+    // Version 1 kept no statistics; reading the transcripts again fills them in.
+    this.state = saved?.version === 2 ? saved : { version: 2, cursors: {}, events: [], seen: {}, buckets: {}, projects: {} }
   }
 
   get events(): readonly UsageEvent[] {
     return this.state.events
+  }
+
+  get buckets(): Readonly<Record<string, UsageBucket>> {
+    return this.state.buckets
+  }
+
+  projectOf(session: string): string | undefined {
+    return this.state.projects[session]
+  }
+
+  /** The first full read of the transcripts has finished. */
+  get complete(): boolean {
+    return !!this.state.complete
+  }
+
+  get scanning(): boolean {
+    return this.busy
   }
 
   /** Write the cache now if anything changed since the last write. */
@@ -125,14 +181,19 @@ export class UsageScanner {
     this.lastSave = Date.now()
   }
 
-  /** Read whatever was added to the transcripts since the last call. Returns true when new replies were found. */
-  async scan(now = Date.now()): Promise<boolean> {
+  /**
+   * Read whatever was added to the transcripts since the last call. Returns true when new replies were found.
+   * `orgAt` tells which organization the desktop app was signed in with at a time, for the statistics.
+   */
+  async scan(now = Date.now(), orgAt?: OrgAt): Promise<boolean> {
     if (this.busy) return false
     this.busy = true
+    this.orgAt = orgAt
     const before = this.state.events.length
+    const revisionBefore = this.revision
     let touched = false
     try {
-      const cutoff = now - KEEP
+      const cutoff = now - STATS_KEEP
       const live = new Set<string>()
       for (const file of transcriptFiles(cutoff)) {
         live.add(file)
@@ -144,7 +205,9 @@ export class UsageScanner {
         }
         const cursor = this.state.cursors[file]
         if (cursor && cursor.size === size) continue
-        const session = path.basename(file).startsWith('agent-') ? path.basename(path.dirname(path.dirname(file))) : path.basename(file, '.jsonl')
+        const sub = path.basename(file).startsWith('agent-')
+        const session = sub ? path.basename(path.dirname(path.dirname(file))) : path.basename(file, '.jsonl')
+        if (!this.state.projects[session]) this.state.projects[session] = path.basename(path.dirname(sub ? path.dirname(path.dirname(file)) : file))
         const end = !cursor || size < cursor.size ? await this.readBackward(file, size, cutoff, session) : await this.readForward(file, cursor.size, size, cutoff, session)
         this.state.cursors[file] = { size: end }
         touched = true
@@ -156,16 +219,42 @@ export class UsageScanner {
           touched = true
         }
       }
+      if (!this.state.complete) {
+        this.state.complete = true
+        touched = true
+      }
       if (!touched) return false
-      this.state.events = this.state.events.filter((e) => e.t >= cutoff).sort((a, b) => a.t - b.t)
+      const keepEvents = now - KEEP
+      this.state.events = this.state.events.filter((e) => e.t >= keepEvents).sort((a, b) => a.t - b.t)
       for (const [id, t] of Object.entries(this.state.seen)) if (t < cutoff) delete this.state.seen[id]
+      for (const [key, b] of Object.entries(this.state.buckets)) if (b.t < cutoff) delete this.state.buckets[key]
+      const sessions = new Set(Object.values(this.state.buckets).map((b) => b.s))
+      for (const s of Object.keys(this.state.projects)) if (!sessions.has(s)) delete this.state.projects[s]
       this.dirty = true
       // The cache is only a speed-up for the next start; writing it at most once a minute is plenty.
       if (Date.now() - this.lastSave > 60_000) this.save()
-      return this.state.events.length !== before
+      return this.state.events.length !== before || this.revision !== revisionBefore
     } finally {
       this.busy = false
     }
+  }
+
+  /** Add one reply to its hourly bucket. */
+  private addToBucket(when: number, session: string, model: string, e: 'd' | 'c' | undefined, usage: Usage, units: number): void {
+    const h = Math.floor(when / HOUR) * HOUR
+    const g = this.orgAt?.(when)
+    const key = `${h}|${session}|${model}|${e ?? ''}|${g ?? ''}`
+    const b = (this.state.buckets[key] ??= { h, s: session, m: model, e, g, u: 0, n: 0, i: 0, o: 0, r: 0, w: 0, c: 0, t: when })
+    const tok = tokensOf(usage)
+    b.u += units
+    b.n++
+    b.i += tok.input
+    b.o += tok.output
+    b.r += tok.cacheRead
+    b.w += tok.cacheWrite
+    b.c += costOf(usage, model)
+    if (when > b.t) b.t = when
+    this.revision++
   }
 
   /** Count one transcript line; returns its timestamp when it has one. */
@@ -190,7 +279,10 @@ export class UsageScanner {
     const u = unitsOf(j.message.usage, j.message.model)
     if (u > 0) {
       const e = j.entrypoint === 'claude-desktop' ? 'd' : j.entrypoint ? 'c' : undefined
-      this.state.events.push({ t: when, u, e, s: j.sessionId ?? session })
+      const s = j.sessionId ?? session
+      // Single replies only matter to the estimate for a week; the statistics keep hourly totals for a month.
+      if (when >= Date.now() - KEEP) this.state.events.push({ t: when, u, e, s })
+      this.addToBucket(when, s, j.message.model ?? '', e, j.message.usage, u)
     }
     return when
   }
@@ -344,11 +436,13 @@ export function windowStart(samples: UsageSample[], evs: Array<{ t: number }>, n
   return ws !== undefined && ws + WINDOW > now ? ws : undefined
 }
 
+/** `rates`, when given, receives the percent-per-unit each account's estimate used (for the run-out forecast). */
 export function estimateUsage(
   accounts: AccountRef[],
   samples: UsageSample[],
   events: Array<{ t: number; u: number; account?: string }>,
-  now = Date.now()
+  now = Date.now(),
+  rates?: Map<string, { fh?: number; sd?: number }>
 ): Map<string, UsageEstimate> {
   const out = new Map<string, UsageEstimate>()
   const per = new Map<string, { samples: UsageSample[]; evs: Array<{ t: number; u: number }>; rate: Rate; ref: AccountRef }>()
@@ -371,6 +465,7 @@ export function estimateUsage(
       basis = 'plan-ratio'
     }
     if (kfh === undefined) continue
+    rates?.set(ref.id, { fh: kfh, sd: ksd })
     const last = own[own.length - 1]
     const since = last?.t ?? now - WINDOW
     const usedSince = sumUnits(evs, since, now)

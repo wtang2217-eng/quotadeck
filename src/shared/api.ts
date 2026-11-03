@@ -6,12 +6,23 @@ import type {
   AppState,
   ContinueRequest,
   ConversationItem,
+  ConversationQuery,
+  DesktopSwitchOptions,
   DesktopSwitchResult,
+  ExportResult,
   IntegrationStatus,
   LoginProgress,
   MergeStatus,
+  PendingSwitch,
+  ProjectItem,
   Settings,
-  UiCommand
+  SetupOptions,
+  SetupProgress,
+  SetupStatus,
+  StatsQuery,
+  UiCommand,
+  UpdateInfo,
+  UsageStats
 } from './types'
 
 export interface QuotaDeckApi {
@@ -40,13 +51,43 @@ export interface QuotaDeckApi {
   // Switching and continuing
   /** Open a terminal window signed in as the account, resuming the conversation when one is given. */
   continueInTerminal(req: ContinueRequest): Promise<ActionResult>
-  /** Copy your conversations into the target account's desktop list so they are there after you sign in with it. */
-  prepareDesktopSwitch(toAccountId: string): Promise<DesktopSwitchResult>
+  /**
+   * Copy your conversations into the target account's desktop list so they are there after you sign in with it,
+   * then watch for the sign-in (AppState.pendingSwitch, onSwitchProgress). When it happens, the continue prompt is
+   * put on the clipboard and a notification says where the conversation is.
+   */
+  prepareDesktopSwitch(toAccountId: string, opts?: DesktopSwitchOptions): Promise<DesktopSwitchResult>
+  /** Stop waiting for the desktop sign-in, or dismiss a finished switch. */
+  cancelPendingSwitch(): Promise<AppState>
+  /** Fires when the pending switch changes phase (done, wrong-account, expired). */
+  onSwitchProgress(cb: (p: PendingSwitch) => void): () => void
   /** Bring the Claude desktop app to the front (or start it). */
   openDesktopApp(): Promise<ActionResult>
+  /** Open one conversation in the desktop app (claude://code/continue). Needs ConversationItem.desktopSessionId. */
+  openInDesktop(target: { cliSessionId?: string; desktopSessionId?: string }): Promise<ActionResult>
 
   // Conversations
-  listConversations(query?: { search?: string; limit?: number }): Promise<ConversationItem[]>
+  listConversations(query?: ConversationQuery): Promise<ConversationItem[]>
+  /** Working folders that have conversations, newest first. */
+  listProjects(): Promise<ProjectItem[]>
+  setFavorite(cliSessionId: string, favorite: boolean): Promise<void>
+  /** Ask where to save, then write the conversation as Markdown. */
+  exportConversation(cliSessionId: string): Promise<ExportResult>
+
+  // Usage statistics (from the local transcripts)
+  getStats(query: StatsQuery): Promise<UsageStats>
+
+  // One-click setup
+  getSetupStatus(): Promise<SetupStatus>
+  /** Do every fixable step in order. Progress and the final status arrive via onSetupProgress. */
+  runSetup(opts: SetupOptions): Promise<{ runId: string }>
+  onSetupProgress(cb: (p: SetupProgress) => void): () => void
+  /** The user closed the setup page: do not open it by itself again. */
+  dismissSetup(): Promise<AppState>
+
+  // Updates
+  /** Check GitHub for a newer release now. */
+  checkForUpdates(): Promise<UpdateInfo>
 
   // Desktop merge
   runMergeNow(): Promise<MergeStatus>
@@ -80,8 +121,20 @@ export const IPC = {
   removeAccount: 'qd:remove-account',
   continueInTerminal: 'qd:continue-in-terminal',
   prepareDesktopSwitch: 'qd:prepare-desktop-switch',
+  cancelPendingSwitch: 'qd:cancel-pending-switch',
+  switchProgress: 'qd:switch-progress',
   openDesktopApp: 'qd:open-desktop-app',
+  openInDesktop: 'qd:open-in-desktop',
   listConversations: 'qd:list-conversations',
+  listProjects: 'qd:list-projects',
+  setFavorite: 'qd:set-favorite',
+  exportConversation: 'qd:export-conversation',
+  getStats: 'qd:get-stats',
+  getSetupStatus: 'qd:get-setup-status',
+  runSetup: 'qd:run-setup',
+  setupProgress: 'qd:setup-progress',
+  dismissSetup: 'qd:dismiss-setup',
+  checkForUpdates: 'qd:check-for-updates',
   runMergeNow: 'qd:run-merge-now',
   undoMerge: 'qd:undo-merge',
   installIntegration: 'qd:install-integration',
