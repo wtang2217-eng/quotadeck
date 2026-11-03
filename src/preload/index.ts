@@ -43,7 +43,8 @@ const api: QuotaDeckApi = {
   clearEvents: () => invoke(IPC.clearEvents),
   openPath: (path) => invoke(IPC.openPath, path),
   openExternal: (url) => invoke(IPC.openExternal, url),
-  copyText: (text) => invoke(IPC.copyText, text)
+  copyText: (text) => invoke(IPC.copyText, text),
+  runCommand: (cmd) => invoke(IPC.runCommand, cmd)
 }
 
 contextBridge.exposeInMainWorld('qd', api)

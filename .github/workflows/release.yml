@@ -1,11 +1,15 @@
 name: Build installers
 
-# Runs when a release is published (and on demand). Each platform builds its installers and attaches them to the
-# release; files with the same name are replaced.
+# Builds the installers on Windows, macOS and Linux, then starts each packaged app in demo mode to prove it
+# opens (it saves screenshots and quits by itself). Screenshots and installers are kept as run artifacts.
+#   push to a ci/** branch, or run by hand: build and check only
+#   a published release: the same, then the installers are attached to it (same-name files are replaced)
 on:
+  push:
+    branches: ['ci/**']
+  workflow_dispatch:
   release:
     types: [published]
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -23,9 +27,10 @@ jobs:
           - os: ubuntu-latest
             script: dist:linux
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -34,20 +39,69 @@ jobs:
       - run: npm test
       - run: npm run ${{ matrix.script }}
         env:
-          # Unsigned builds; see the README for how to open them.
+          # No signing certificates; macOS is signed ad-hoc (see electron-builder.yml).
           CSC_IDENTITY_AUTO_DISCOVERY: false
-      - uses: actions/upload-artifact@v4
+
+      - name: Launch check (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem release/*/win-unpacked/QuotaDeck.exe | Select-Object -First 1
+          $shots = Join-Path $PWD 'launch-shots'
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList '--demo', "--screenshots=$shots" -PassThru
+          if (-not $p.WaitForExit(300000)) { Stop-Process -Id $p.Id -Force; throw 'QuotaDeck did not finish within 5 minutes' }
+          $n = @(Get-ChildItem $shots -Filter *.png -ErrorAction SilentlyContinue).Count
+          if ($n -lt 1) { throw 'the packaged app wrote no screenshots' }
+          "screenshots: $n"
+
+      - name: Launch check (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          app=$(ls -d release/*/mac*/QuotaDeck.app | head -1)
+          {
+            echo "== codesign -dv $app"; codesign -dv --verbose=2 "$app" 2>&1
+            echo "== codesign --verify"; codesign --verify --deep --strict --verbose=2 "$app" 2>&1
+            echo "== architectures"; lipo -archs "$app/Contents/MacOS/QuotaDeck"
+            echo "== Gatekeeper (an ad-hoc signature is expected to be rejected)"; spctl -a -vv "$app" 2>&1 || true
+          } | tee codesign.txt
+          codesign --verify --deep --strict "$app"
+          "$app/Contents/MacOS/QuotaDeck" --demo --screenshots="$PWD/launch-shots" &
+          pid=$!
+          for _ in $(seq 1 300); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+          if kill -0 "$pid" 2>/dev/null; then kill -9 "$pid"; echo 'QuotaDeck did not finish within 5 minutes'; exit 1; fi
+          ls launch-shots/*.png
+
+      - name: Launch check (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb > /dev/null
+          bin=$(ls release/*/linux-unpacked/quotadeck | head -1)
+          timeout 300 xvfb-run -a "$bin" --no-sandbox --demo --screenshots="$PWD/launch-shots"
+          ls launch-shots/*.png
+
+      - uses: actions/upload-artifact@v7
         with:
-          name: quotadeck-${{ matrix.os }}
+          name: launch-shots-${{ runner.os }}
+          path: |
+            launch-shots/*.png
+            codesign.txt
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-${{ runner.os }}
           path: |
             release/*/*.exe
             release/*/*.dmg
             release/*/*.AppImage
             release/*/*.deb
           if-no-files-found: error
+
       - name: Attach to the release
         if: github.event_name == 'release'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" release/*/*.{exe,dmg,AppImage,deb} --clobber 2>/dev/null || gh release upload "${{ github.event.release.tag_name }}" $(ls release/*/*.exe release/*/*.dmg release/*/*.AppImage release/*/*.deb 2>/dev/null) --clobber
+        run: |
+          shopt -s nullglob
+          files=(release/*/*.exe release/*/*.dmg release/*/*.AppImage release/*/*.deb)
+          gh release upload "${{ github.event.release.tag_name }}" "${files[@]}" --clobber

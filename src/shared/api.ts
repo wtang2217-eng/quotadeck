@@ -63,6 +63,8 @@ export interface QuotaDeckApi {
   openPath(path: string): Promise<void>
   openExternal(url: string): Promise<void>
   copyText(text: string): Promise<void>
+  /** Show the main window and run a UI command there (used by the tray popover; optional so the browser mock can omit it). */
+  runCommand?(cmd: UiCommand): Promise<void>
 }
 
 /** IPC channel names. Kept in one place so main and preload cannot drift apart. */
@@ -90,5 +92,6 @@ export const IPC = {
   clearEvents: 'qd:clear-events',
   openPath: 'qd:open-path',
   openExternal: 'qd:open-external',
-  copyText: 'qd:copy-text'
+  copyText: 'qd:copy-text',
+  runCommand: 'qd:run-command'
 } as const

@@ -232,6 +232,8 @@ export interface Settings {
   accent: AccentChoice
   /** macOS: show the desktop account's 5-hour usage next to the menu bar icon. */
   trayShowPercent: boolean
+  /** Accelerator that shows or hides the main window from anywhere, e.g. "CommandOrControl+Shift+Q". Empty = off. */
+  globalShortcut: string
 }
 
 export type UiStyle = 'swiss' | 'editorial' | 'eclipse'

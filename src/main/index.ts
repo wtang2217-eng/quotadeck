@@ -1,20 +1,27 @@
 import path from 'node:path'
-import { app, BrowserWindow, nativeTheme, Notification, shell } from 'electron'
-import type { Settings, UiCommand } from '@shared/types'
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeTheme, Notification, shell } from 'electron'
+import { IPC } from '@shared/api'
+import type { Language, Page, Settings, UiCommand } from '@shared/types'
+import { macMenuTemplate } from './appMenu'
 import type { Backend } from './backend'
 import { Engine, type Notice } from './core/engine'
 import { listTranscripts } from './core/history'
 import { DemoBackend } from './demo'
 import { openClaudeDesktop } from './desktopApp'
 import { registerIpc, sendCommand } from './ipc'
+import { applyLoginItem, openedAtLogin } from './loginItem'
 import { captureScreenshots } from './screenshots'
 import { TrayController } from './tray'
+import { TrayPopover } from './trayPopover'
+import { surface, titleBarOptions, titleBarOverlay } from './windowChrome'
 
 const argv = process.argv.slice(1)
 const DEMO = argv.includes('--demo')
 const SCREENSHOTS = argv.find((a) => a.startsWith('--screenshots='))?.slice('--screenshots='.length)
 const CAPTURE = argv.find((a) => a.startsWith('--capture='))?.slice('--capture='.length)
 const START_HIDDEN = argv.includes('--hidden')
+const IS_MAC = process.platform === 'darwin'
+const IS_WIN = process.platform === 'win32'
 
 if (SCREENSHOTS) app.commandLine.appendSwitch('force-device-scale-factor', '1.5')
 // Demo runs never touch the real profile, and may run next to the real app.
@@ -24,21 +31,42 @@ app.setAppUserModelId('io.github.wtang2217-eng.quotadeck')
 
 let win: BrowserWindow | undefined
 let tray: TrayController | undefined
+let popover: TrayPopover | undefined
 let backend: Backend
 let quitting = false
+let shortcut = ''
+let menuLanguage: Language | undefined
 const liveNotifications = new Set<Notification>()
 
 function resource(...p: string[]): string {
   return app.isPackaged ? path.join(process.resourcesPath, 'resources', ...p) : path.join(app.getAppPath(), 'resources', ...p)
 }
 
+function chromeBackground(): string {
+  return surface(backend?.settings.uiStyle, nativeTheme.shouldUseDarkColors).bg
+}
+
 function showWindow(): void {
+  if (IS_MAC) void app.dock?.show()
   if (!win || win.isDestroyed()) createWindow(true)
   else {
     if (win.isMinimized()) win.restore()
     win.show()
     win.focus()
   }
+  if (IS_MAC) app.focus({ steal: true })
+}
+
+function hideWindow(): void {
+  win?.hide()
+  // Like other menu bar apps: no Dock icon while the window is closed.
+  if (IS_MAC && !DEMO) app.dock?.hide()
+}
+
+/** The global shortcut: bring the window up, or put it away when it is already in front. */
+function toggleWindow(): void {
+  if (win && !win.isDestroyed() && win.isVisible() && !win.isMinimized() && win.isFocused()) hideWindow()
+  else showWindow()
 }
 
 function command(cmd: UiCommand): void {
@@ -57,9 +85,10 @@ function createWindow(show: boolean): void {
     minHeight: 600,
     show: false,
     title: 'QuotaDeck',
-    icon: resource(process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    icon: resource(IS_WIN ? 'icon.ico' : 'icon.png'),
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0E0F14' : '#F6F7FB',
+    backgroundColor: chromeBackground(),
+    ...titleBarOptions(process.platform, backend?.settings.uiStyle, nativeTheme.shouldUseDarkColors),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -77,8 +106,12 @@ function createWindow(show: boolean): void {
     if (!quitting && !DEMO) {
       // Closing the window keeps QuotaDeck in the tray so limit alerts still arrive.
       e.preventDefault()
-      win?.hide()
+      hideWindow()
     }
+  })
+  // A demo run ends with its window, even when the hidden tray popover is still around.
+  win.on('closed', () => {
+    if (DEMO) app.quit()
   })
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\//i.test(url)) void shell.openExternal(url)
@@ -106,10 +139,63 @@ function notify(n: Notice): void {
   note.show()
 }
 
+/** Background and caption buttons follow the style and light/dark mode. */
+function applyChrome(): void {
+  const s = backend?.settings
+  if (!s) return
+  const dark = nativeTheme.shouldUseDarkColors
+  if (win && !win.isDestroyed()) {
+    win.setBackgroundColor(surface(s.uiStyle, dark).bg)
+    if (IS_WIN) win.setTitleBarOverlay(titleBarOverlay(s.uiStyle, dark))
+  }
+  popover?.setBackground(surface(s.uiStyle, dark).bg)
+}
+
+function setMacMenu(lang: Language): void {
+  if (!IS_MAC || lang === menuLanguage) return
+  menuLanguage = lang
+  const actions = {
+    openSettings: () => command({ type: 'navigate', page: 'settings' }),
+    openAbout: () => command({ type: 'navigate', page: 'about' }),
+    openUrl: (url: string) => void shell.openExternal(url)
+  }
+  Menu.setApplicationMenu(Menu.buildFromTemplate(macMenuTemplate(lang, actions, !app.isPackaged)))
+}
+
+/** (Re)register the show/hide shortcut. A key taken by another app is logged, never fatal. */
+function registerShortcut(accelerator: string | undefined): void {
+  const next = (accelerator ?? '').trim()
+  if (next === shortcut) return
+  if (shortcut) globalShortcut.unregister(shortcut)
+  shortcut = ''
+  // Screenshot runs leave the keyboard alone; a demo next to the real app just finds the key taken.
+  if (!next || SCREENSHOTS || CAPTURE) return
+  try {
+    if (globalShortcut.register(next, toggleWindow)) shortcut = next
+    else console.warn(`[shortcut] ${next} is already used by another app`)
+  } catch (e) {
+    console.warn(`[shortcut] cannot register "${next}": ${(e as Error).message}`)
+  }
+}
+
 function applySettings(s: Settings): void {
   nativeTheme.themeSource = s.theme
-  if (app.isPackaged && !DEMO) app.setLoginItemSettings({ openAtLogin: s.openAtLogin, args: ['--hidden'] })
+  if (app.isPackaged && !DEMO) applyLoginItem(s.openAtLogin)
+  applyChrome()
+  setMacMenu(s.language)
+  registerShortcut(s.globalShortcut)
   tray?.update(backend.getState())
+}
+
+/** UI commands the tray popover may ask for; anything else is dropped. */
+function validCommand(value: unknown): UiCommand | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const c = value as Record<string, unknown>
+  const id = (v: unknown) => (typeof v === 'string' && v.length <= 100 ? v : undefined)
+  if (c.type === 'navigate' && typeof c.page === 'string' && /^[a-z-]{1,40}$/.test(c.page)) return { type: 'navigate', page: c.page as Page }
+  if (c.type === 'open-switch') return { type: 'open-switch', fromAccountId: id(c.fromAccountId), toAccountId: id(c.toAccountId) }
+  if (c.type === 'open-add-account') return { type: 'open-add-account' }
+  return undefined
 }
 
 async function main(): Promise<void> {
@@ -119,6 +205,8 @@ async function main(): Promise<void> {
   }
   app.on('second-instance', () => showWindow())
   await app.whenReady()
+  // Windows and Linux have no menu bar; their editing shortcuts work without one. Dev builds keep Electron's menu.
+  if (!IS_MAC && app.isPackaged) Menu.setApplicationMenu(null)
 
   backend = DEMO
     ? new DemoBackend(app.getLocale().toLowerCase().startsWith('zh') ? 'zh-CN' : 'en')
@@ -131,11 +219,23 @@ async function main(): Promise<void> {
       })
 
   registerIpc(backend, () => win, applySettings)
+  ipcMain.handle(IPC.runCommand, (_e, value: unknown) => {
+    const cmd = validCommand(value)
+    popover?.hide()
+    if (cmd) command(cmd)
+  })
   await backend.start()
   nativeTheme.themeSource = backend.settings.theme
+  nativeTheme.on('updated', applyChrome)
 
-  tray = new TrayController((look) => resource('tray', `tray-${look}.png`), {
+  popover = new TrayPopover({
+    background: chromeBackground,
+    preload: path.join(__dirname, '../preload/index.js'),
+    rendererDir: path.join(__dirname, '../renderer')
+  })
+  tray = new TrayController((look) => resource('tray', look === 'template' ? 'trayTemplate.png' : `tray-${look}.png`), {
     open: showWindow,
+    togglePopover: (bounds) => popover?.toggle(bounds),
     quit: () => {
       quitting = true
       app.quit()
@@ -153,11 +253,15 @@ async function main(): Promise<void> {
     },
     mergeNow: () => backend.runMergeNow()
   })
-  backend.on('state', (s) => tray?.update(s))
+  backend.on('state', (s) => {
+    tray?.update(s)
+    popover?.send(IPC.state, s)
+  })
   tray.update(backend.getState())
 
-  const hidden = START_HIDDEN || (backend.settings.startHidden && !SCREENSHOTS && !CAPTURE)
+  const hidden = START_HIDDEN || openedAtLogin() || (backend.settings.startHidden && !SCREENSHOTS && !CAPTURE)
   createWindow(!hidden)
+  if (hidden && IS_MAC && !DEMO) app.dock?.hide()
   applySettings(backend.settings)
 
   const shotsDir = SCREENSHOTS ?? CAPTURE
@@ -174,9 +278,11 @@ async function main(): Promise<void> {
 
 app.on('before-quit', () => {
   quitting = true
+  popover?.destroy()
   tray?.destroy()
   void backend?.stop()
 })
+app.on('will-quit', () => globalShortcut.unregisterAll())
 // Stay in the tray when the window is closed.
 app.on('window-all-closed', () => {
   if (DEMO) app.quit()

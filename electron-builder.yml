@@ -19,6 +19,7 @@ asar: true
 # Only ship the UI languages the app has; drops ~40 MB of Chromium locales.
 electronLanguages: [zh-CN, en-US]
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
 win:
   icon: resources/icon.ico
   target:
@@ -32,18 +33,53 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   shortcutName: QuotaDeck
+  uninstallDisplayName: QuotaDeck
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
+  installerHeaderIcon: resources/icon.ico
+  # The installer follows the Windows display language (Chinese or English).
+  installerLanguages: [zh_CN, en_US]
+  multiLanguageInstaller: true
   artifactName: ${productName}-${version}-setup.${ext}
 portable:
   artifactName: ${productName}-${version}-portable.${ext}
+
 mac:
   icon: resources/icon.png
   category: public.app-category.developer-tools
+  # One download for Apple silicon and Intel Macs.
   target:
     - target: dmg
-      arch: [arm64, x64]
+      arch: [universal]
+  # No Apple Developer ID: sign ad-hoc so Apple silicon Macs run it instead of calling it "damaged".
+  # Hardened runtime would reject Electron's frameworks under an ad-hoc signature, and there is no notarization.
+  identity: '-'
+  hardenedRuntime: false
+  notarize: false
+dmg:
+  title: ${productName} ${version}
+  artifactName: ${productName}-${version}-mac-universal.${ext}
+  background: resources/dmg-background.png
+  iconSize: 96
+  window:
+    width: 540
+    height: 380
+  contents:
+    - x: 140
+      y: 216
+      type: file
+    - x: 400
+      y: 216
+      type: link
+      path: /Applications
+
 linux:
   icon: resources/icon.png
   category: Development
+  executableName: quotadeck
+  synopsis: Claude multi-account panel
+  # The .deb needs a maintainer; this is the project's public GitHub no-reply address.
+  maintainer: wtang2217-eng <317202314+wtang2217-eng@users.noreply.github.com>
   target:
     - AppImage
     - deb
