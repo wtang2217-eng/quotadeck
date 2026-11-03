@@ -1041,3 +1041,49 @@
 .star.on svg {
   fill: currentColor;
 }
+
+/* ---------- About ---------- */
+.about-id {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.about-id .about-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+.about-id .about-meta {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.about-id .page-actions {
+  margin-left: auto;
+}
+.about-rule {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 24px;
+  padding: 14px 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.about-rule:last-child {
+  border-bottom-color: var(--line);
+}
+.about-rule-title {
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.about-rule-body {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-2);
+}
+.about-links {
+  display: flex;
+  gap: 16px;
+  margin-top: 6px;
+}

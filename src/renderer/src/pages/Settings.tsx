@@ -5,6 +5,8 @@ import type { AccentChoice, Density, IntegrationStatus, Language, Settings as Se
 import {
   IconBell,
   IconCheck,
+  IconCommand,
+  IconUpdate,
   IconEye,
   IconFolder,
   IconInfo,
@@ -71,6 +73,30 @@ function Section({ icon, title, sub, children }: { icon: ReactNode; title: strin
   )
 }
 
+/** Records a key combination: press it in the box; Backspace clears it. */
+function ShortcutInput({ value, mac, onSave }: { value: string; mac: boolean; onSave: (v: string) => void }) {
+  const { t } = useApp()
+  const shown = (v: string) => (v ? v.replace('CommandOrControl', mac ? '⌘' : 'Ctrl').replace(/\+/g, ' + ') : '')
+  return (
+    <input
+      className="input"
+      style={{ width: 220 }}
+      readOnly
+      value={shown(value)}
+      placeholder={t('setShortcutPlaceholder')}
+      onKeyDown={(e) => {
+        e.preventDefault()
+        if (e.key === 'Backspace' || e.key === 'Delete') return onSave('')
+        if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return
+        const parts = [e.ctrlKey || e.metaKey ? 'CommandOrControl' : '', e.altKey ? 'Alt' : '', e.shiftKey ? 'Shift' : ''].filter(Boolean)
+        if (!parts.length) return
+        const key = e.key.length === 1 ? e.key.toUpperCase() : e.key
+        onSave([...parts, key].join('+'))
+      }}
+    />
+  )
+}
+
 function Row({ label, hint, children, top }: { label: ReactNode; hint?: ReactNode; children: ReactNode; top?: boolean }) {
   return (
     <div className={`set-row${top ? ' top' : ''}`}>
@@ -112,6 +138,27 @@ export function Settings() {
   useEffect(() => setDirOverride(s.desktopDataDirOverride ?? ''), [s.desktopDataDirOverride])
   useEffect(() => setPort(String(s.serverPort)), [s.serverPort])
   useEffect(() => setVolume(Math.round(s.soundVolume * 100)), [s.soundVolume])
+
+  const [checking, setChecking] = useState(false)
+  const info = state.update
+  const updateLine = info?.available
+    ? t('setUpdateAvailable', { v: info.latest ?? '' })
+    : info?.checkedAt
+      ? t('setUpdateLatest', { v: state.appVersion, ago: formatAgo(info.checkedAt, lang, now) })
+      : t('setUpdateNever')
+  const checkNow = async () => {
+    setChecking(true)
+    try {
+      const res = await api.checkForUpdates()
+      if (res.available && res.url) toast(t('setUpdateAvailable', { v: res.latest ?? '' }), 'ok')
+      else toast(t('setUpdateUpToDate'), 'ok')
+      setState(await api.getState())
+    } catch (e) {
+      toast(t('errGeneric', { msg: errMessage(e) }), 'bad')
+    } finally {
+      setChecking(false)
+    }
+  }
 
   const update = async (patch: Partial<SettingsT>, savedToast = false) => {
     try {
@@ -257,6 +304,29 @@ export function Settings() {
           </Row>
           <Row label={t('setStartHidden')}>
             <Toggle label={t('setStartHidden')} on={s.startHidden} onChange={(v) => void update({ startHidden: v })} />
+          </Row>
+        </Section>
+
+        <Section icon={<IconCommand size={16} />} title={t('setShortcuts')}>
+          <Row label={t('setGlobalShortcut')} hint={t('setGlobalShortcutHint')}>
+            <ShortcutInput value={s.globalShortcut} mac={state.platform === 'darwin'} onSave={(v) => void update({ globalShortcut: v }, true)} />
+          </Row>
+          {state.platform === 'darwin' && (
+            <Row label={t('setTrayPercent')} hint={t('setTrayPercentHint')}>
+              <Toggle label={t('setTrayPercent')} on={s.trayShowPercent} onChange={(v) => void update({ trayShowPercent: v })} />
+            </Row>
+          )}
+        </Section>
+
+        <Section icon={<IconUpdate size={16} />} title={t('setUpdates')}>
+          <Row label={t('setAutoUpdates')} hint={t('setAutoUpdatesHint')}>
+            <Toggle label={t('setAutoUpdates')} on={s.autoCheckUpdates} onChange={(v) => void update({ autoCheckUpdates: v })} />
+          </Row>
+          <Row label={t('setCheckNow')} hint={updateLine}>
+            <button type="button" className="btn btn-sm" disabled={checking} onClick={() => void checkNow()}>
+              {checking && <Spinner />}
+              {t('setCheckNowGo')}
+            </button>
           </Row>
         </Section>
 
