@@ -1,6 +1,6 @@
 // Sidebar (scope switcher, navigation, status) and the top strip (where you are, search, notifications).
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { formatAgo } from '@shared/format'
 import type { Page } from '@shared/types'
 import { useApp } from '../context'
@@ -154,18 +154,47 @@ export function Sidebar() {
   )
 }
 
+const READ_KEY = 'qd.notifications.readAt'
+const ALERTS = new Set(['limit-hit', 'threshold', 'reset', 'error', 'switch', 'login'])
+
+function readAt(): number {
+  try {
+    return Number(localStorage.getItem(READ_KEY)) || 0
+  } catch {
+    return 0
+  }
+}
+
+/** Recent alerts; the dot shows while some are unread. "Mark all as read" is remembered per computer. */
 function Notifications() {
   const { state, t, lang, now, navigate } = useApp()
-  const recent = state.events.slice(0, 6)
+  const [seen, setSeen] = useState(readAt)
+  const recent = state.events.filter((e) => ALERTS.has(e.type)).slice(0, 8)
+  const unread = recent.filter((e) => e.at > seen).length
+  const markRead = () => {
+    const at = Date.now()
+    setSeen(at)
+    try {
+      localStorage.setItem(READ_KEY, String(at))
+    } catch {
+      /* the dot just comes back next start */
+    }
+  }
   const items: MenuEntry[] = [
     { heading: t('notifications') },
     ...(recent.length
-      ? recent.map((e) => ({ label: e.title, detail: formatAgo(e.at, lang, now), onSelect: () => navigate('activity') }))
+      ? recent.map((e) => ({
+          label: e.at > seen ? <b>{e.title}</b> : e.title,
+          detail: formatAgo(e.at, lang, now),
+          icon: <span className={`dot${e.type === 'limit-hit' || e.type === 'error' ? ' bad' : e.type === 'threshold' ? ' warn' : ''}`} />,
+          onSelect: () => navigate('activity')
+        }))
       : [{ label: t('notificationsEmpty'), disabled: true, onSelect: () => undefined }]),
     'sep',
+    ...(unread ? [{ label: t('notifMarkRead'), onSelect: markRead }] : []),
     { label: t('notificationsAll'), onSelect: () => navigate('activity') }
   ]
-  const fresh = state.events.some((e) => (e.type === 'limit-hit' || e.type === 'threshold') && now - e.at < 3600_000)
+  const fresh = unread > 0
   return (
     <Menu
       width={300}

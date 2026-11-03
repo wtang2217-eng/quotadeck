@@ -1,12 +1,13 @@
 // Ctrl/Cmd + K: jump to a page, change the view scope, or run a common action, by typing.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { ConversationItem } from '@shared/types'
 import { createPortal } from 'react-dom'
 import type { Page } from '@shared/types'
 import { useApp } from '../context'
 import { play } from '../sound'
-import { displayName, resolveTheme } from '../util'
-import { IconArrowRight, IconLayers, IconMoon, IconPlus, IconRefresh, IconSearch, IconUser } from './icons'
+import { displayName, planText, resolveTheme } from '../util'
+import { IconArrowRight, IconChat, IconMoon, IconPlus, IconRefresh, IconSearch, IconSwitch } from './icons'
 import { PAGE_KEYS } from './Shell'
 
 interface Cmd {
@@ -21,16 +22,40 @@ interface Cmd {
 const PAGES: Page[] = ['dashboard', 'stats', 'conversations', 'accounts', 'activity', 'settings', 'about']
 
 export function CommandPalette({ onClose }: { onClose: () => void }) {
-  const { state, t, navigate, setScope, openDialog, api, setState } = useApp()
+  const { state, t, navigate, openDialog, api, setState, toast } = useApp()
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(0)
+  const [convs, setConvs] = useState<ConversationItem[]>([])
   const input = useRef<HTMLInputElement>(null)
+
+  // Conversations matching what is typed (the 8 most recent while the box is empty).
+  useEffect(() => {
+    let alive = true
+    const h = window.setTimeout(() => {
+      api
+        .listConversations({ search: q.trim() || undefined, limit: 8 })
+        .then((list) => alive && setConvs(list))
+        .catch(() => undefined)
+    }, 120)
+    return () => {
+      alive = false
+      window.clearTimeout(h)
+    }
+  }, [api, q])
+
+  const current = state.accounts.find((a) => a.isDesktopCurrent)
+  const resume = (c: ConversationItem) => {
+    if (c.desktopSessionId && current && current.status !== 'limited')
+      void api.openInDesktop({ desktopSessionId: c.desktopSessionId, cliSessionId: c.cliSessionId }).then((r) => !r.ok && toast(t('errGeneric', { msg: r.error ?? '' }), 'bad'))
+    else openDialog({ type: 'switch', mode: 'both', cliSessionId: c.cliSessionId, cwd: c.cwd, title: c.title })
+  }
 
   const all: Cmd[] = useMemo(
     () => [
       ...PAGES.map((p) => ({ id: `p-${p}`, group: t('plPages'), label: t(PAGE_KEYS[p]), icon: <IconArrowRight />, run: () => navigate(p) })),
-      { id: 's-all', group: t('plScope'), label: t('scopeAll'), icon: <IconLayers />, run: () => setScope('all') },
-      ...state.accounts.map((a) => ({ id: `s-${a.id}`, group: t('plScope'), label: displayName(a), hint: a.email, icon: <IconUser />, run: () => setScope(a.id) })),
+      ...state.accounts
+        .filter((a) => !a.isDesktopCurrent)
+        .map((a) => ({ id: `s-${a.id}`, group: t('plSwitch'), label: displayName(a), hint: planText(a.plan, t), icon: <IconSwitch />, run: () => openDialog({ type: 'switch', mode: 'desktop', toAccountId: a.id }) })),
       { id: 'a-add', group: t('plActions'), label: t('addAccount'), icon: <IconPlus />, run: () => openDialog({ type: 'add' }) },
       { id: 'a-refresh', group: t('plActions'), label: t('plRefresh'), icon: <IconRefresh />, run: () => void api.refresh().then(setState) },
       {
@@ -43,7 +68,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     ],
     [state.accounts, state.settings.theme, t]
   )
-  const list = q.trim() ? all.filter((c) => `${c.label} ${c.hint ?? ''} ${c.group}`.toLowerCase().includes(q.trim().toLowerCase())) : all
+  const fixed = q.trim() ? all.filter((c) => `${c.label} ${c.hint ?? ''} ${c.group}`.toLowerCase().includes(q.trim().toLowerCase())) : all
+  const list: Cmd[] = [...fixed, ...convs.map((c) => ({ id: `c-${c.cliSessionId}`, group: t('plConversations'), label: c.title, hint: c.cwd?.split(/[\\/]/).filter(Boolean).pop(), icon: <IconChat />, run: () => resume(c) }))]
 
   useEffect(() => {
     play('open')
