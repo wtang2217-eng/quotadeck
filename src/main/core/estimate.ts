@@ -1,0 +1,417 @@
+// Live usage estimate between the desktop app's records (it writes one about every 15 minutes).
+//
+// Every reply in a Claude Code transcript carries its token usage. QuotaDeck turns those into cost-weighted
+// "units" (prices relative to input tokens, heavier models weigh more), learns from each account's own history how
+// many percent one unit is worth, and adds what was used since the last real record. Nothing leaves the computer
+// and no API is called; the result is always labeled as an estimate.
+
+import fs from 'node:fs'
+import path from 'node:path'
+import type { UsageEstimate } from '@shared/types'
+import type { UsageSample } from './desktop'
+import { readJson, writeJsonAtomic } from './jsonfile'
+import { projectsDir, qdPaths, safeReaddir } from './paths'
+
+const MIN = 60_000
+const HOUR = 60 * MIN
+const DAY = 24 * HOUR
+const WINDOW = 5 * HOUR
+const KEEP = 7 * DAY
+const CHUNK = 1024 * 1024
+
+export interface UsageEvent {
+  /** When the reply was written (transcript timestamp). */
+  t: number
+  /** Cost-weighted token units. */
+  u: number
+  /** "d" started in the desktop app, "c" in a terminal, undefined when the transcript does not say. */
+  e?: 'd' | 'c'
+  /** Claude Code session id. */
+  s: string
+}
+
+interface Usage {
+  input_tokens?: number
+  output_tokens?: number
+  cache_read_input_tokens?: number
+  cache_creation_input_tokens?: number
+  cache_creation?: { ephemeral_1h_input_tokens?: number; ephemeral_5m_input_tokens?: number }
+}
+
+const FAMILY: Array<[RegExp, number]> = [
+  [/fable/i, 5],
+  [/opus/i, 5],
+  [/sonnet/i, 1],
+  [/haiku/i, 1 / 3]
+]
+
+/** Units of one reply: token counts weighted like API prices, in millions of Sonnet input tokens. */
+export function unitsOf(usage: Usage, model: string | undefined): number {
+  const weight = FAMILY.find(([re]) => re.test(model ?? ''))?.[1] ?? 1
+  const input = usage.input_tokens ?? 0
+  const output = usage.output_tokens ?? 0
+  const read = usage.cache_read_input_tokens ?? 0
+  const write1h = usage.cache_creation?.ephemeral_1h_input_tokens ?? 0
+  const write5m = usage.cache_creation?.ephemeral_5m_input_tokens ?? Math.max(0, (usage.cache_creation_input_tokens ?? 0) - write1h)
+  return (weight * (input + 1.25 * write5m + 2 * write1h + 0.1 * read + 5 * output)) / 1e6
+}
+
+// ---------------------------------------------------------------------------------------------- scanning
+
+interface ScanState {
+  version: 1
+  cursors: Record<string, { size: number }>
+  events: UsageEvent[]
+  /** Reply ids already counted (one reply spans several transcript lines), with their time for pruning. */
+  seen: Record<string, number>
+}
+
+function splitLines(buf: Buffer): Buffer[] {
+  const out: Buffer[] = []
+  let start = 0
+  for (let i = buf.indexOf(0x0a); i !== -1; i = buf.indexOf(0x0a, start)) {
+    out.push(buf.subarray(start, i))
+    start = i + 1
+  }
+  out.push(buf.subarray(start))
+  return out
+}
+
+/** Transcripts of the last week: top-level sessions and their subagents. */
+function transcriptFiles(cutoff: number): string[] {
+  const out: string[] = []
+  const root = projectsDir()
+  for (const proj of safeReaddir(root)) {
+    const dir = path.join(root, proj)
+    for (const name of safeReaddir(dir)) {
+      const p = path.join(dir, name)
+      if (name.endsWith('.jsonl')) out.push(p)
+      else if (/^[0-9a-f-]{36}$/i.test(name)) {
+        for (const sub of safeReaddir(path.join(p, 'subagents'))) if (sub.endsWith('.jsonl')) out.push(path.join(p, 'subagents', sub))
+      }
+    }
+  }
+  return out.filter((f) => {
+    try {
+      return fs.statSync(f).mtimeMs >= cutoff
+    } catch {
+      return false
+    }
+  })
+}
+
+const yieldToLoop = () => new Promise<void>((r) => setImmediate(r))
+
+export class UsageScanner {
+  private state: ScanState
+  private busy = false
+  private lastSave = 0
+  private dirty = false
+
+  constructor(private readonly file = path.join(qdPaths().root, 'usage-scan.json')) {
+    const saved = readJson<ScanState>(file)
+    this.state = saved?.version === 1 ? saved : { version: 1, cursors: {}, events: [], seen: {} }
+  }
+
+  get events(): readonly UsageEvent[] {
+    return this.state.events
+  }
+
+  /** Write the cache now if anything changed since the last write. */
+  save(): void {
+    if (!this.dirty) return
+    writeJsonAtomic(this.file, this.state)
+    this.dirty = false
+    this.lastSave = Date.now()
+  }
+
+  /** Read whatever was added to the transcripts since the last call. Returns true when new replies were found. */
+  async scan(now = Date.now()): Promise<boolean> {
+    if (this.busy) return false
+    this.busy = true
+    const before = this.state.events.length
+    let touched = false
+    try {
+      const cutoff = now - KEEP
+      const live = new Set<string>()
+      for (const file of transcriptFiles(cutoff)) {
+        live.add(file)
+        let size: number
+        try {
+          size = fs.statSync(file).size
+        } catch {
+          continue
+        }
+        const cursor = this.state.cursors[file]
+        if (cursor && cursor.size === size) continue
+        const session = path.basename(file).startsWith('agent-') ? path.basename(path.dirname(path.dirname(file))) : path.basename(file, '.jsonl')
+        const end = !cursor || size < cursor.size ? await this.readBackward(file, size, cutoff, session) : await this.readForward(file, cursor.size, size, cutoff, session)
+        this.state.cursors[file] = { size: end }
+        touched = true
+        await yieldToLoop()
+      }
+      for (const f of Object.keys(this.state.cursors)) {
+        if (!live.has(f)) {
+          delete this.state.cursors[f]
+          touched = true
+        }
+      }
+      if (!touched) return false
+      this.state.events = this.state.events.filter((e) => e.t >= cutoff).sort((a, b) => a.t - b.t)
+      for (const [id, t] of Object.entries(this.state.seen)) if (t < cutoff) delete this.state.seen[id]
+      this.dirty = true
+      // The cache is only a speed-up for the next start; writing it at most once a minute is plenty.
+      if (Date.now() - this.lastSave > 60_000) this.save()
+      return this.state.events.length !== before
+    } finally {
+      this.busy = false
+    }
+  }
+
+  /** Count one transcript line; returns its timestamp when it has one. */
+  private take(line: Buffer, cutoff: number, session: string): number | undefined {
+    if (line.length < 40) return undefined
+    const text = line.toString('utf8')
+    const ts = /"timestamp":"([^"]+)"/.exec(text)
+    const t = ts ? Date.parse(ts[1]) : NaN
+    if (!text.includes('"usage"') || !text.includes('"type":"assistant"')) return Number.isFinite(t) ? t : undefined
+    let j: { type?: string; timestamp?: string; requestId?: string; entrypoint?: string; sessionId?: string; message?: { id?: string; model?: string; usage?: Usage } }
+    try {
+      j = JSON.parse(text)
+    } catch {
+      return Number.isFinite(t) ? t : undefined
+    }
+    const when = Date.parse(j.timestamp ?? '')
+    if (j.type !== 'assistant' || !j.message?.usage || j.message.model === '<synthetic>' || !Number.isFinite(when)) return Number.isFinite(when) ? when : undefined
+    if (when < cutoff) return when
+    const id = `${j.message.id ?? ''}:${j.requestId ?? ''}`
+    if (this.state.seen[id]) return when
+    this.state.seen[id] = when
+    const u = unitsOf(j.message.usage, j.message.model)
+    if (u > 0) {
+      const e = j.entrypoint === 'claude-desktop' ? 'd' : j.entrypoint ? 'c' : undefined
+      this.state.events.push({ t: when, u, e, s: j.sessionId ?? session })
+    }
+    return when
+  }
+
+  /** First read of a file: walk back from its end until replies are older than the cutoff. */
+  private async readBackward(file: string, size: number, cutoff: number, session: string): Promise<number> {
+    const fd = await fs.promises.open(file, 'r')
+    try {
+      // Only complete lines count; a line still being written is picked up by the next forward read.
+      let end = size
+      while (end > 0) {
+        const start = Math.max(0, end - 64 * 1024)
+        const buf = Buffer.alloc(end - start)
+        await fd.read(buf, 0, buf.length, start)
+        const nl = buf.lastIndexOf(0x0a)
+        if (nl !== -1) {
+          end = start + nl + 1
+          break
+        }
+        end = start
+      }
+      let pos = end
+      let carry: Buffer = Buffer.alloc(0)
+      while (pos > 0) {
+        const start = Math.max(0, pos - CHUNK)
+        const buf = Buffer.alloc(pos - start)
+        await fd.read(buf, 0, buf.length, start)
+        const parts = splitLines(Buffer.concat([buf, carry]))
+        const first = parts.shift()!
+        carry = start > 0 ? first : Buffer.alloc(0)
+        if (start === 0) parts.unshift(first)
+        let oldest = Infinity
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const t = this.take(parts[i], cutoff, session)
+          if (t !== undefined && t < oldest) oldest = t
+        }
+        if (oldest < cutoff) break
+        pos = start
+        await yieldToLoop()
+      }
+      return end
+    } finally {
+      await fd.close()
+    }
+  }
+
+  private async readForward(file: string, from: number, size: number, cutoff: number, session: string): Promise<number> {
+    const fd = await fs.promises.open(file, 'r')
+    try {
+      const buf = Buffer.alloc(size - from)
+      await fd.read(buf, 0, buf.length, from)
+      const nl = buf.lastIndexOf(0x0a)
+      if (nl === -1) return from
+      for (const line of splitLines(buf.subarray(0, nl))) this.take(line, cutoff, session)
+      return from + nl + 1
+    } finally {
+      await fd.close()
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------------------------- estimating
+
+export interface AccountRef {
+  id: string
+  orgUuid?: string
+  /** Relative plan size (Pro = 1, Max 5x = 5, ...). */
+  weight: number
+}
+
+export interface Attribution {
+  samples: UsageSample[]
+  /** Sessions whose account is known (started by QuotaDeck, or reported by the SessionStart hook). */
+  sessionAccounts: Record<string, { accountId: string }>
+  /** Conversation ids that appear in a desktop list, for transcripts that do not record where they started. */
+  desktopSessions: Set<string>
+  /** Account of terminal sessions in the default ~/.claude folder. */
+  defaultCliAccountId?: string
+  orgToAccount: Map<string, string>
+}
+
+/** Which account a reply belongs to. Desktop replies go to the account the app was signed in with at that time. */
+export function attribute(events: readonly UsageEvent[], a: Attribution): Array<{ t: number; u: number; account?: string }> {
+  const samples = a.samples
+  return events.map((ev) => {
+    const known = a.sessionAccounts[ev.s]?.accountId
+    if (known) return { t: ev.t, u: ev.u, account: known }
+    const desktop = ev.e === 'd' || (ev.e === undefined && a.desktopSessions.has(ev.s))
+    if (!desktop) return { t: ev.t, u: ev.u, account: a.defaultCliAccountId }
+    let lo = 0
+    let hi = samples.length - 1
+    let idx = -1
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      if (samples[mid].t <= ev.t) {
+        idx = mid
+        lo = mid + 1
+      } else hi = mid - 1
+    }
+    return { t: ev.t, u: ev.u, account: idx >= 0 ? a.orgToAccount.get(samples[idx].org) : undefined }
+  })
+}
+
+interface Rate {
+  fh?: number
+  sd?: number
+  pairs: number
+}
+
+const sumUnits = (evs: Array<{ t: number; u: number }>, from: number, to: number) => {
+  let s = 0
+  for (const e of evs) if (e.t > from && e.t <= to) s += e.u
+  return s
+}
+
+/** Percent per unit for one account, from consecutive records with local replies in between. */
+export function learnRate(samples: UsageSample[], evs: Array<{ t: number; u: number }>, now: number, skip?: number): Rate {
+  let dfh = 0
+  let ufh = 0
+  let dsd = 0
+  let usd = 0
+  let pairs = 0
+  for (let i = 1; i < samples.length; i++) {
+    if (i === skip) continue
+    const a = samples[i - 1]
+    const b = samples[i]
+    if (now - b.t > KEEP || b.t - a.t > 40 * MIN) continue
+    const u = sumUnits(evs, a.t, b.t)
+    if (u <= 0) continue
+    pairs++
+    if (a.fh !== undefined && b.fh !== undefined && b.fh >= a.fh) {
+      dfh += b.fh - a.fh
+      ufh += u
+    }
+    if (a.sd !== undefined && b.sd !== undefined && b.sd >= a.sd) {
+      dsd += b.sd - a.sd
+      usd += u
+    }
+  }
+  return { fh: ufh > 0 && dfh > 0 ? dfh / ufh : undefined, sd: usd > 0 && dsd > 0 ? dsd / usd : undefined, pairs }
+}
+
+/** Start of the 5-hour window that is open now, from the account's replies and the records that read 0%. */
+export function windowStart(samples: UsageSample[], evs: Array<{ t: number }>, now: number): number | undefined {
+  let ws: number | undefined
+  const zeros = samples.filter((s) => s.fh === 0).map((s) => s.t)
+  for (const e of evs) {
+    if (ws !== undefined && (e.t >= ws + WINDOW || zeros.some((z) => z > ws! && z < e.t))) ws = undefined
+    if (ws === undefined) ws = e.t
+  }
+  return ws !== undefined && ws + WINDOW > now ? ws : undefined
+}
+
+export function estimateUsage(
+  accounts: AccountRef[],
+  samples: UsageSample[],
+  events: Array<{ t: number; u: number; account?: string }>,
+  now = Date.now()
+): Map<string, UsageEstimate> {
+  const out = new Map<string, UsageEstimate>()
+  const per = new Map<string, { samples: UsageSample[]; evs: Array<{ t: number; u: number }>; rate: Rate; ref: AccountRef }>()
+  for (const ref of accounts) {
+    const own = ref.orgUuid ? samples.filter((s) => s.org === ref.orgUuid) : []
+    const evs = events.filter((e) => e.account === ref.id)
+    per.set(ref.id, { samples: own, evs, rate: learnRate(own, evs, now), ref })
+  }
+  // The best-trained account lends its rate to new ones, scaled by plan size.
+  const teacher = [...per.values()].filter((p) => p.rate.fh && p.rate.pairs >= 3).sort((a, b) => b.rate.pairs - a.rate.pairs)[0]
+
+  for (const { samples: own, evs, rate, ref } of per.values()) {
+    let basis: UsageEstimate['basis'] = 'own-history'
+    let kfh = rate.pairs >= 3 ? rate.fh : undefined
+    let ksd = rate.pairs >= 3 ? rate.sd : undefined
+    if (kfh === undefined && teacher && teacher.ref.id !== ref.id) {
+      const scale = teacher.ref.weight / Math.max(0.1, ref.weight)
+      kfh = teacher.rate.fh! * scale
+      ksd = teacher.rate.sd !== undefined ? teacher.rate.sd * scale : undefined
+      basis = 'plan-ratio'
+    }
+    if (kfh === undefined) continue
+    const last = own[own.length - 1]
+    const since = last?.t ?? now - WINDOW
+    const usedSince = sumUnits(evs, since, now)
+    const ws = windowStart(own, evs, now)
+    if (usedSince <= 0 && ws === undefined) continue
+
+    let fiveHour: number | undefined
+    if (ws !== undefined && (!last || ws > last.t)) fiveHour = kfh * sumUnits(evs, ws - 1, now)
+    else if (last?.fh !== undefined) fiveHour = last.fh + kfh * usedSince
+    let sevenDay: number | undefined
+    if (ksd !== undefined && last?.sd !== undefined) sevenDay = last.sd + ksd * usedSince
+    const clamp = (v: number | undefined) => (v === undefined ? undefined : Math.min(100, Math.max(0, Math.round(v))))
+    out.set(ref.id, {
+      at: now,
+      fiveHour: clamp(fiveHour),
+      sevenDay: clamp(sevenDay),
+      fiveHourResetsAt: ws !== undefined ? ws + WINDOW : undefined,
+      basis,
+      fromRecordAt: last?.t
+    })
+  }
+  return out
+}
+
+/** Leave-one-out check of the 5-hour rate on an account's own history: mean absolute error in points. */
+export function backtest(samples: UsageSample[], evs: Array<{ t: number; u: number }>, now = Date.now()): { pairs: number; mae: number; bias: number } {
+  let n = 0
+  let abs = 0
+  let bias = 0
+  for (let i = 1; i < samples.length; i++) {
+    const a = samples[i - 1]
+    const b = samples[i]
+    if (now - b.t > KEEP || b.t - a.t > 40 * MIN || a.fh === undefined || b.fh === undefined || b.fh < a.fh) continue
+    const u = sumUnits(evs, a.t, b.t)
+    if (u <= 0) continue
+    const k = learnRate(samples, evs, now, i).fh
+    if (!k) continue
+    const err = a.fh + k * u - b.fh
+    n++
+    abs += Math.abs(err)
+    bias += err
+  }
+  return { pairs: n, mae: n ? abs / n : NaN, bias: n ? bias / n : NaN }
+}

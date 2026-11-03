@@ -1,0 +1,50 @@
+appId: io.github.wtang2217-eng.quotadeck
+productName: QuotaDeck
+copyright: Copyright © 2026 QuotaDeck contributors
+directories:
+  output: release/${version}
+  buildResources: resources
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+extraResources:
+  - from: resources
+    to: resources
+    filter:
+      - icon.png
+      - icon.ico
+      - tray/**
+asar: true
+# Only ship the UI languages the app has; drops ~40 MB of Chromium locales.
+electronLanguages: [zh-CN, en-US]
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+win:
+  icon: resources/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: QuotaDeck
+  artifactName: ${productName}-${version}-setup.${ext}
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+mac:
+  icon: resources/icon.png
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+linux:
+  icon: resources/icon.png
+  category: Development
+  target:
+    - AppImage
+    - deb
+publish: null

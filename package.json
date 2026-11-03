@@ -1,0 +1,45 @@
+{
+  "name": "quotadeck",
+  "productName": "QuotaDeck",
+  "version": "0.1.0",
+  "description": "A local, unofficial multi-account panel for Claude Code and the Claude desktop app: see each account's plan and usage, get notified at the limit, switch with one click and keep your conversations.",
+  "main": "./out/main/index.js",
+  "author": "wtang2217-eng",
+  "license": "MIT",
+  "homepage": "https://github.com/wtang2217-eng/quotadeck",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wtang2217-eng/quotadeck.git"
+  },
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "dev:demo": "electron-vite dev -- --demo",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "smoke": "vitest run --config vitest.smoke.config.mts --silent=false",
+    "icons": "node scripts/build-icons.mjs",
+    "screenshots": "electron-vite build && electron . --demo --screenshots=docs/images",
+    "dist": "electron-vite build && electron-builder --win --x64",
+    "dist:mac": "electron-vite build && electron-builder --mac",
+    "dist:linux": "electron-vite build && electron-builder --linux"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "png-to-ico": "^3.0.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
+  }
+}

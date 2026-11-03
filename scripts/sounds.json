@@ -1,0 +1,16 @@
+{
+  "_comment": "UI sounds rendered from the earshot sound bank (https://github.com/Leonxlnx/earshot, MIT). Change an id or a level, then run: python scripts/render-sounds.py --earshot <path to an earshot checkout>. List ids with: earshot sfx list",
+  "sounds": {
+    "click": { "id": "pro_click/soft", "peak_db": -15 },
+    "toggleOn": { "id": "toggle/on", "peak_db": -13 },
+    "toggleOff": { "id": "toggle/off", "peak_db": -13 },
+    "open": { "id": "pro_pop_in/round", "peak_db": -15 },
+    "close": { "id": "ui_pop/fall", "peak_db": -17 },
+    "success": { "id": "mallet/up4", "peak_db": -11 },
+    "switch": { "id": "pro_zip/up", "peak_db": -13 },
+    "warn": { "id": "notify/mid_wood", "peak_db": -11 },
+    "alert": { "id": "pro_notify/ding_1822", "peak_db": -9 },
+    "error": { "id": "knock/double", "peak_db": -13 },
+    "copy": { "id": "drip/plink", "peak_db": -15 }
+  }
+}

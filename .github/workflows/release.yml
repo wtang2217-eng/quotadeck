@@ -1,0 +1,53 @@
+name: Build installers
+
+# Runs when a release is published (and on demand). Each platform builds its installers and attaches them to the
+# release; files with the same name are replaced.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: dist
+          - os: macos-latest
+            script: dist:mac
+          - os: ubuntu-latest
+            script: dist:linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run ${{ matrix.script }}
+        env:
+          # Unsigned builds; see the README for how to open them.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quotadeck-${{ matrix.os }}
+          path: |
+            release/*/*.exe
+            release/*/*.dmg
+            release/*/*.AppImage
+            release/*/*.deb
+          if-no-files-found: error
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" release/*/*.{exe,dmg,AppImage,deb} --clobber 2>/dev/null || gh release upload "${{ github.event.release.tag_name }}" $(ls release/*/*.exe release/*/*.dmg release/*/*.AppImage release/*/*.deb 2>/dev/null) --clobber

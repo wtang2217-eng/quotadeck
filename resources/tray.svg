@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Tray version of the eclipse: fewer details, a thicker crescent. CRESCENT is replaced per state. -->
+  <defs>
+    <linearGradient id="bg" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#2A1D70"/>
+      <stop offset="1" stop-color="#0B0920"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.7" cy="0.7" r="0.65">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.55" stop-color="CRESCENT"/>
+      <stop offset="1" stop-color="CRESCENT"/>
+    </radialGradient>
+  </defs>
+  <rect x="24" y="24" width="976" height="976" rx="240" fill="url(#bg)"/>
+  <circle cx="548" cy="532" r="352" fill="CRESCENT" opacity="0.3"/>
+  <circle cx="548" cy="532" r="318" fill="url(#sun)"/>
+  <circle cx="452" cy="452" r="300" fill="#0B0920"/>
+</svg>

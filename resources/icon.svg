@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- QuotaDeck: an eclipse. One account goes dark while the next one lights up. -->
+  <defs>
+    <clipPath id="tile"><rect x="32" y="32" width="960" height="960" rx="224"/></clipPath>
+    <linearGradient id="bg" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#22175E"/>
+      <stop offset="0.5" stop-color="#110C35"/>
+      <stop offset="1" stop-color="#060511"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.68" cy="0.68" r="0.64">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.34" stop-color="#FFF2FC"/>
+      <stop offset="0.6" stop-color="#EBD9FF"/>
+      <stop offset="0.84" stop-color="#B8A2FF"/>
+      <stop offset="1" stop-color="#8676F3"/>
+    </radialGradient>
+    <radialGradient id="moon" cx="0.3" cy="0.26" r="0.86">
+      <stop offset="0" stop-color="#2E2876"/>
+      <stop offset="0.5" stop-color="#171443"/>
+      <stop offset="0.86" stop-color="#0B0A25"/>
+      <stop offset="1" stop-color="#08071C"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="0.58" stop-color="#C4B5FD" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#FFF5FF" stop-opacity="0.9"/>
+    </linearGradient>
+    <linearGradient id="corona" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#2DD4BF"/>
+      <stop offset="0.32" stop-color="#60A5FA"/>
+      <stop offset="0.62" stop-color="#A78BFA"/>
+      <stop offset="1" stop-color="#F9A8D4"/>
+    </linearGradient>
+    <linearGradient id="spikeH" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="spikeV" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="flare" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.35" stop-color="#FDE7FF" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#F0ABFC" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.13"/>
+      <stop offset="0.38" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.32"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.12"/>
+    </linearGradient>
+    <filter id="b120" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="120"/></filter>
+    <filter id="b50" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="50"/></filter>
+    <filter id="b40" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="40"/></filter>
+    <filter id="b16" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="16"/></filter>
+    <filter id="b6" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="b1" x="-20%" y="-300%" width="140%" height="700%"><feGaussianBlur stdDeviation="1.3"/></filter>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.09 0 0 0 -0.03"/>
+    </filter>
+  </defs>
+
+  <g clip-path="url(#tile)">
+    <rect x="32" y="32" width="960" height="960" fill="url(#bg)"/>
+
+    <!-- nebula -->
+    <circle cx="230" cy="190" r="300" fill="#7C3AED" opacity="0.55" filter="url(#b120)"/>
+    <circle cx="860" cy="270" r="220" fill="#DB2777" opacity="0.26" filter="url(#b120)"/>
+    <circle cx="790" cy="900" r="300" fill="#0891B2" opacity="0.36" filter="url(#b120)"/>
+    <circle cx="170" cy="840" r="230" fill="#4338CA" opacity="0.32" filter="url(#b120)"/>
+
+    <!-- stars -->
+    <g fill="#FFFFFF">
+      <circle cx="378" cy="128" r="2.3" opacity="0.76"/><circle cx="137" cy="709" r="1.1" opacity="0.38"/><circle cx="175" cy="722" r="2.4" opacity="0.27"/><circle cx="335" cy="173" r="2.0" opacity="0.28"/><circle cx="387" cy="895" r="2.4" opacity="0.69"/><circle cx="934" cy="103" r="1.6" opacity="0.72"/><circle cx="89" cy="254" r="2.5" opacity="0.36"/><circle cx="316" cy="848" r="2.3" opacity="0.81"/><circle cx="716" cy="200" r="1.8" opacity="0.61"/><circle cx="472" cy="103" r="2.3" opacity="0.33"/><circle cx="92" cy="686" r="1.7" opacity="0.6"/><circle cx="313" cy="959" r="1.2" opacity="0.35"/><circle cx="96" cy="526" r="1.4" opacity="0.44"/><circle cx="348" cy="942" r="1.9" opacity="0.67"/><circle cx="823" cy="90" r="2.1" opacity="0.48"/><circle cx="870" cy="499" r="2.7" opacity="0.62"/><circle cx="884" cy="266" r="2.1" opacity="0.52"/><circle cx="876" cy="628" r="2.0" opacity="0.31"/><circle cx="585" cy="892" r="1.7" opacity="0.48"/><circle cx="897" cy="438" r="2.6" opacity="0.71"/><circle cx="754" cy="739" r="1.4" opacity="0.3"/><circle cx="687" cy="126" r="2.5" opacity="0.33"/><circle cx="716" cy="932" r="2.4" opacity="0.31"/>
+    </g>
+    <!-- two brighter stars with a glint -->
+    <g fill="#FFFFFF">
+      <circle cx="214" cy="372" r="3.4"/>
+      <rect x="198" y="371" width="32" height="2" rx="1" opacity="0.7"/><rect x="213" y="356" width="2" height="32" rx="1" opacity="0.7"/>
+      <circle cx="822" cy="824" r="3"/>
+      <rect x="808" y="823" width="28" height="2" rx="1" opacity="0.6"/><rect x="821" y="810" width="2" height="28" rx="1" opacity="0.6"/>
+    </g>
+
+    <!-- corona -->
+    <circle cx="540" cy="500" r="336" fill="none" stroke="#A78BFA" stroke-width="150" opacity="0.14" filter="url(#b50)"/>
+    <circle cx="540" cy="500" r="268" fill="none" stroke="url(#corona)" stroke-width="112" opacity="0.5" filter="url(#b40)"/>
+    <circle cx="540" cy="500" r="250" fill="none" stroke="url(#corona)" stroke-width="34" opacity="0.92" filter="url(#b16)"/>
+
+    <!-- the account that lights up -->
+    <circle cx="540" cy="500" r="240" fill="url(#sun)"/>
+    <!-- the account that goes dark -->
+    <circle cx="499" cy="467" r="236" fill="url(#moon)"/>
+    <circle cx="499" cy="467" r="232" fill="none" stroke="#C4B5FD" stroke-opacity="0.22" stroke-width="10" filter="url(#b6)"/>
+    <circle cx="499" cy="467" r="234.5" fill="none" stroke="url(#rim)" stroke-width="3"/>
+
+    <!-- diamond ring -->
+    <circle cx="727" cy="650" r="88" fill="url(#flare)" opacity="0.85"/>
+    <g filter="url(#b1)">
+      <ellipse cx="727" cy="650" rx="190" ry="4" fill="url(#spikeH)" opacity="0.95"/>
+      <ellipse cx="727" cy="650" rx="4" ry="130" fill="url(#spikeV)" opacity="0.8"/>
+      <ellipse cx="727" cy="650" rx="78" ry="2.4" fill="url(#spikeH)" opacity="0.6" transform="rotate(45 727 650)"/>
+      <ellipse cx="727" cy="650" rx="78" ry="2.4" fill="url(#spikeH)" opacity="0.6" transform="rotate(-45 727 650)"/>
+    </g>
+    <circle cx="727" cy="650" r="15" fill="#FFFFFF"/>
+
+    <rect x="32" y="32" width="960" height="960" fill="url(#sheen)"/>
+    <rect x="32" y="32" width="960" height="960" filter="url(#grain)"/>
+  </g>
+  <rect x="33.5" y="33.5" width="957" height="957" rx="222.5" fill="none" stroke="url(#edge)" stroke-width="3"/>
+</svg>
