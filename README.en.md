@@ -55,7 +55,7 @@ Every design decision follows Claude Code's [Legal and compliance](https://code.
 - **It never touches login credentials.** QuotaDeck never reads, copies, stores or uploads tokens or cookies. The terms say developers "may not collect, store, or intermediate Claude.ai credentials or session tokens — sign-in to a Claude account must complete through Anthropic's own flow". Adding an account therefore opens Claude Code's own `claude auth login` page, and Claude Code keeps the sign-in in its own folder.
 - **Usage numbers without API calls.** Only data Claude Code and the desktop app write on your computer is read: the status line's usage data, the desktop app's local usage history, and the limit events. Your login is never used to call any API.
 - **Every switch needs your click.** There is no unattended rotation.
-- **Desktop sign-in is yours to do.** The desktop app holds one account at a time; switching means signing out and in (about 15 seconds with Google). Switching without signing in would require storing your credentials, which the terms forbid.
+- **Desktop sign-in is yours to do.** The desktop app holds one account at a time; switching means signing out and in (about 15 seconds). Switching without signing in would require storing your credentials, which the terms forbid.
 - **Conversation merging is unofficial.** It copies conversation list files inside the desktop app's data folder: copy only, nothing deleted, backed up first, undoable. A major desktop update may break it. Chat and Cowork histories are not touched.
 
 One **grey area** is yours to judge: the terms set no limit on how many accounts a person has, and the docs show how to stay signed in to several. But the usage policy forbids intentionally bypassing product restrictions, and plan limits assume ordinary individual use. Switching from account A to B when A runs out is not explicitly forbidden, but registering accounts just for more usage, or rotating 24/7, may well be treated as bypassing limits and risks a ban. The officially supported way to keep going is [usage credits](https://code.claude.com/docs/en/costs#add-usage-credits-to-your-subscription) or a higher plan.
@@ -68,7 +68,7 @@ One **grey area** is yours to judge: the terms set no limit on how many accounts
 
 ## Usage
 
-1. **Add accounts**: click "Add account", confirm it is your own, and sign in on Claude's official page in the browser (Google works). The account already signed in at the terminal can be added with one click. Claude Code renews the sign-in itself; QuotaDeck tells you if one needs signing in again.
+1. **Add accounts**: click "Add account", confirm it is your own, and sign in on Claude's official page in the browser (Google, email code or any method the account uses). The account already signed in at the terminal can be added with one click. Claude Code renews the sign-in itself; QuotaDeck tells you if one needs signing in again.
 2. **Connect to Claude Code** (recommended): QuotaDeck adds two entries to `~/.claude/settings.json` — a hook that tells it when a session hits a limit, and the status line. Nothing else is changed, a backup is made first, and Settings can remove both.
 3. **When an account runs out**: click the notification, then either **continue in a terminal** with the recommended account (the conversation is resumed), or **switch the desktop app**: QuotaDeck copies your conversations into the target account's list and walks you through signing in; then open the same conversation in the sidebar and carry on.
 
