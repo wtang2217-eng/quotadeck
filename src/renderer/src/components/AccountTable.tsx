@@ -1,14 +1,14 @@
 // The accounts as a table: one row each, usage meters inline, the desktop account marked with an accent rule.
 
-import { formatClock, formatIn } from '@shared/format'
-import type { AccountView, UsageEstimate, UsageSnapshot, UsageWindow } from '@shared/types'
+import { formatAgo, formatClock, formatIn } from '@shared/format'
+import type { AccountView, Language, UsageEstimate, UsageSnapshot, UsageWindow } from '@shared/types'
 import { useApp } from '../context'
 import type { T, TKey } from '../i18n'
 import { displayName, pctLevel, planText, shownPct, statusKey } from '../util'
 import { IconFolder, IconLogin, IconMonitor, IconMore, IconPencil, IconTerminal, IconTrash } from './icons'
 import { Menu } from './Menu'
 
-const COLS = 'minmax(200px, 1.8fr) minmax(132px, 1.2fr) minmax(132px, 1.2fr) 76px 92px 128px'
+const COLS = 'minmax(180px, 1.45fr) minmax(156px, 1.35fr) minmax(156px, 1.35fr) 70px 90px 128px'
 
 function estimateTip(est: UsageEstimate | undefined, usage: UsageSnapshot | undefined, recorded: UsageWindow | undefined, t: T, clock: (ts: number) => string): string | undefined {
   if (!est) return undefined
@@ -22,61 +22,87 @@ function estimateTip(est: UsageEstimate | undefined, usage: UsageSnapshot | unde
   return parts.join('\n')
 }
 
-/** Percent, reset time and a thin bar. The estimate above the last record draws lighter. */
-export function MeterCell({
-  w,
-  estimatePct,
-  estimateResetsAt,
-  limitResetsAt,
-  tip,
-  compact,
-  label
-}: {
-  w: UsageWindow | undefined
-  estimatePct?: number
-  estimateResetsAt?: number
-  limitResetsAt?: number
-  tip?: string
-  /** Percent and bar only, for narrow places. */
-  compact?: boolean
-  /** Small name of the window before the percent (compact rows). */
-  label?: string
-}) {
+const WINDOW_MS = { fh: 5 * 3600_000, sd: 7 * 24 * 3600_000 } as const
+/** A record older than this may be out of date (the desktop app writes one about every 15 minutes while in use). */
+const STALE_MS = 45 * 60_000
+
+/** Where the shown number comes from, how old it is, and whether it may be out of date. */
+export function sourceInfo(a: AccountView, estimated: boolean, t: T, lang: Language, now: number): { text: string; stale: boolean; tip: string } | undefined {
+  const at = estimated ? a.estimate?.at : a.usage?.at
+  if (!at) return undefined
+  const ago = formatAgo(at, lang, now)
+  const src = estimated ? t('srcEstimate') : a.usage?.source === 'desktop' ? t('srcDesktop') : a.usage?.source === 'terminal' ? t('srcTerminal') : t('srcEvent')
+  const stale = now - at > STALE_MS
+  return { text: `${src} · ${ago}`, stale, tip: stale ? t('srcStaleTip', { src, ago }) : `${src} · ${ago}` }
+}
+
+/**
+ * One window of one account: the percent with its source, a thin bar with a tick at the time already gone in the
+ * window, the reset time, and where the current pace leads. `compact` keeps the percent, a source dot and the bar.
+ */
+export function MeterCell({ account: a, kind, tip, compact, label }: { account: AccountView; kind: 'fh' | 'sd'; tip?: string; compact?: boolean; label?: string }) {
   const { t, lang, tz, now, state } = useApp()
+  const w = kind === 'fh' ? a.usage?.fiveHour : a.usage?.sevenDay
+  const estimatePct = kind === 'fh' ? a.estimate?.fiveHour : a.estimate?.sevenDay
+  const estimateResetsAt = kind === 'fh' ? a.estimate?.fiveHourResetsAt : undefined
+  const limitResetsAt = a.limit?.kind === (kind === 'fh' ? 'session' : 'weekly') ? a.limit.resetsAt : undefined
+  const etaAt = kind === 'fh' ? a.eta?.fiveHourFullAt : a.eta?.sevenDayFullAt
+  const clock = (ts: number) => formatClock(ts, tz, lang, now)
+
   const recorded = w ? Math.min(100, Math.max(0, w.pct)) : 0
   const shown = shownPct(w, estimatePct)
-  const level = pctLevel(w?.pct ?? shown.pct, state.settings.warnAt)
-  const cls = level === 'warn' ? ' warn' : level === 'bad' ? ' bad' : ''
-  const extra = shown.estimated && shown.pct !== undefined ? Math.max(0, shown.pct - recorded) : 0
+  const pct = shown.pct
   const realReset = w?.resetsAt && w.resetsAt > now ? w.resetsAt : limitResetsAt && limitResetsAt > now ? limitResetsAt : undefined
   const reset = realReset ?? (estimateResetsAt && estimateResetsAt > now ? estimateResetsAt : undefined)
-  const resetLabel = compact
-    ? ''
-    : reset
-      ? t('resetAt', { clock: formatClock(reset, tz, lang, now) })
-      : w && w.pct <= 0
-        ? t('notStartedShort')
-        : w
-          ? t('resetUnknownShort')
-          : ''
-  const showTip = shown.estimated && tip
+
+  // Share of the window already gone, from its reset time.
+  const span = WINDOW_MS[kind]
+  const start = reset ? reset - span : undefined
+  const gone = start !== undefined ? Math.min(1, Math.max(0, (now - start) / span)) : undefined
+  const ahead = pct !== undefined && gone !== undefined && pct < 100 && pct - gone * 100 > 10
+  const level = pctLevel(w?.pct ?? pct, state.settings.warnAt)
+  const cls = level === 'bad' ? ' bad' : level === 'warn' || ahead ? ' warn' : ''
+  const extra = shown.estimated && pct !== undefined ? Math.max(0, pct - recorded) : 0
+
+  // Where this pace leads; nothing is concluded in the first tenth of the window.
+  let pace: { text: string; warn: boolean } | undefined
+  if (pct !== undefined && pct < 100 && gone !== undefined && gone >= 0.1 && start !== undefined && reset) {
+    const projected = pct / gone
+    const fullAt = etaAt && etaAt < reset ? etaAt : projected >= 100 && pct > 0 ? start + ((now - start) * 100) / pct : undefined
+    if (fullAt && fullAt < reset) pace = { text: t('paceFull', { clock: clock(fullAt) }), warn: true }
+    else pace = { text: t('paceLeft', { n: Math.min(100, Math.max(0, Math.round(100 - projected))) }), warn: false }
+  }
+
+  const resetLabel = reset ? t('resetAt', { clock: clock(reset) }) : w && w.pct <= 0 ? t('notStartedShort') : w ? t('resetUnknownShort') : ''
+  const src = sourceInfo(a, shown.estimated, t, lang, now)
+  const showTip = shown.estimated && tip && !compact
   return (
     <div className={`meter-cell${showTip ? ' has-tip tip-start' : ''}`} data-tip={showTip ? tip : undefined} tabIndex={showTip ? 0 : undefined}>
       <div className="meter-top">
         {label && <span className="meter-label">{label}</span>}
-        <span className={`meter-pct${shown.pct === undefined ? ' na' : cls}`}>
-          {shown.pct === undefined ? '—' : `${shown.estimated ? t('approx') : ''}${Math.round(shown.pct)}%`}
+        <span className={`meter-pct${pct === undefined ? ' na' : level === 'bad' ? ' bad' : level === 'warn' ? ' warn' : ''}`}>
+          {pct === undefined ? '—' : `${shown.estimated ? t('approx') : ''}${Math.round(pct)}%`}
         </span>
+        {src &&
+          (compact ? (
+            <span className={`src-dot${src.stale ? ' stale' : ''}`} title={src.tip} />
+          ) : (
+            <span className={`meter-src${src.stale ? ' stale' : ''}`} title={src.tip}>
+              {src.stale ? t('srcStale') : src.text}
+            </span>
+          ))}
       </div>
       <div className="meter" aria-hidden="true">
         {w && <div className={`meter-fill${cls}`} style={{ width: `${recorded}%` }} />}
         {extra > 0 && <div className={`meter-est${cls}`} style={{ left: `${recorded}%`, width: `${extra}%` }} />}
+        {gone !== undefined && gone > 0 && gone < 1 && <span className="meter-tick" style={{ left: `${gone * 100}%` }} />}
       </div>
-      {resetLabel && (
+      {!compact && resetLabel && (
         <span className="meter-reset" title={reset ? formatIn(reset, lang, now) : undefined}>
           {resetLabel}
         </span>
       )}
+      {!compact && pace && <span className={`meter-pace${pace.warn ? ' warn' : ''}`}>{pace.text}</span>}
     </div>
   )
 }
@@ -139,19 +165,8 @@ export function AccountTable({ accounts, onScope }: { accounts: AccountView[]; o
                   )}
                 </div>
               </div>
-              <MeterCell
-                w={u?.fiveHour}
-                estimatePct={est?.fiveHour}
-                estimateResetsAt={est?.fiveHourResetsAt}
-                limitResetsAt={a.limit?.kind === 'session' ? a.limit.resetsAt : undefined}
-                tip={estimateTip(est, u, u?.fiveHour, t, clock)}
-              />
-              <MeterCell
-                w={u?.sevenDay}
-                estimatePct={est?.sevenDay}
-                limitResetsAt={a.limit?.kind === 'weekly' ? a.limit.resetsAt : undefined}
-                tip={estimateTip(est, u, u?.sevenDay, t, clock)}
-              />
+              <MeterCell account={a} kind="fh" tip={estimateTip(est, u, u?.fiveHour, t, clock)} />
+              <MeterCell account={a} kind="sd" tip={estimateTip(est, u, u?.sevenDay, t, clock)} />
               <span className={`dt-num${eta ? '' : ' dim'}`} title={a.eta?.fiveHourPerHour ? `${Math.round(a.eta.fiveHourPerHour)}%/h` : undefined}>
                 {eta ? clock(eta) : '—'}
               </span>

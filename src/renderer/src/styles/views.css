@@ -1268,3 +1268,51 @@
   color: var(--text-2);
   white-space: pre-wrap;
 }
+
+/* ---------- Meter: source, elapsed-time tick, pace ---------- */
+.meter-src {
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--text-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.meter-src.stale {
+  color: var(--warn-text);
+}
+.src-dot {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  align-self: center;
+  border-radius: 50%;
+  background: var(--text-4);
+}
+.src-dot.stale {
+  background: var(--warn);
+}
+.meter {
+  overflow: visible;
+}
+.meter-fill,
+.meter-est {
+  border-radius: 2px;
+}
+.meter-tick {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  margin-left: -0.5px;
+  background: var(--text-2);
+  opacity: 0.55;
+}
+.meter-pace {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+.meter-pace.warn {
+  color: var(--warn-text);
+}
