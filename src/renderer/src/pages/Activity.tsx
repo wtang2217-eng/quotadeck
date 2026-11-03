@@ -13,10 +13,11 @@ import {
   IconX,
   IconZap
 } from '../components/icons'
-import { Avatar, ConfirmButton, Empty } from '../components/ui'
+import { ConfirmButton, Empty } from '../components/ui'
 import { useApp } from '../context'
 import { play } from '../sound'
 import { eventKey, eventTone, errMessage } from '../util'
+import { displayName as nameOf, shortName } from '../util'
 
 function EventIcon({ type }: { type: ActivityType }) {
   const size = 16
@@ -96,21 +97,19 @@ export function Activity() {
         [...groups.entries()].map(([k, events]) => (
           <section className="day" key={k}>
             <h3 className="day-title">{dayTitle(k, events[0].at)}</h3>
-            <div className="card tl">
+            <div className="tl">
               {events.map((ev) => {
                 const tone = eventTone(ev.type)
                 const acct = ev.accountId ? byId.get(ev.accountId) : undefined
                 return (
                   <div className="tl-item" key={ev.id}>
                     <div className={`tl-icon tone-${tone}`}>
-                      {ev.type === 'reset' ? <IconCheck size={16} stroke={2.2} /> : <EventIcon type={ev.type} />}
+                      {ev.type === 'reset' ? <IconCheck size={15} /> : <EventIcon type={ev.type} />}
                     </div>
                     <div className="tl-body">
                       <div className="tl-title">
                         <span className="ellipsis">{ev.title}</span>
-                        <span className={`badge tone-${tone}`} style={{ height: 19, fontSize: 11 }}>
-                          {t(eventKey(ev.type))}
-                        </span>
+                        <span className={`tl-kind tone-${tone}`}>{t(eventKey(ev.type))}</span>
                       </div>
                       {ev.detail && <div className="tl-detail">{ev.detail}</div>}
                       {ev.cliSessionId && (
@@ -135,7 +134,13 @@ export function Activity() {
                         </div>
                       )}
                     </div>
-                    {acct && <Avatar account={acct} size={22} />}
+                    {acct ? (
+                      <span className="tl-acct" title={nameOf(acct)}>
+                        {shortName(acct)}
+                      </span>
+                    ) : (
+                      <span />
+                    )}
                     <div className="tl-time" title={formatDateTime(ev.at, tz, lang)}>
                       {formatClock(ev.at, tz, lang, ev.at)}
                     </div>

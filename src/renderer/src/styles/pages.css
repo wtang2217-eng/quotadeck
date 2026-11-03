@@ -709,3 +709,91 @@
 }
 
 
+
+/* ---------- Activity on the continuous surface (overrides the older timeline) ---------- */
+.day + .day {
+  margin-top: 26px;
+}
+.day-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.tl {
+  border-top: 1px solid var(--line);
+}
+.tl-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto 56px;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.tl-item:not(:last-child)::after {
+  display: none;
+}
+.tl-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text-3);
+}
+.tl-icon.tone-bad {
+  color: var(--bad-text);
+  border-color: var(--bad-line);
+  background: var(--bad-soft);
+}
+.tl-icon.tone-warn {
+  color: var(--warn-text);
+  border-color: var(--warn-line);
+  background: var(--warn-soft);
+}
+.tl-icon.tone-ok,
+.tl-icon.tone-info,
+.tl-icon.tone-accent,
+.tl-icon.tone-muted {
+  background: var(--surface);
+}
+.tl-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.tl-kind {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-3);
+  background: none;
+}
+.tl-kind.tone-bad {
+  color: var(--bad-text);
+}
+.tl-kind.tone-warn {
+  color: var(--warn-text);
+}
+.tl-detail {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.tl-acct {
+  font-size: 12px;
+  color: var(--text-3);
+  white-space: nowrap;
+  padding-top: 5px;
+}
+.tl-time {
+  padding-top: 5px;
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
