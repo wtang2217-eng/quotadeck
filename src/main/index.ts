@@ -13,6 +13,7 @@ import { applyLoginItem, openedAtLogin } from './loginItem'
 import { captureScreenshots } from './screenshots'
 import { TrayController } from './tray'
 import { TrayPopover } from './trayPopover'
+import { Splash } from './splash'
 import { surface, titleBarOptions, titleBarOverlay } from './windowChrome'
 
 const argv = process.argv.slice(1)
@@ -32,6 +33,7 @@ app.setAppUserModelId('io.github.wtang2217-eng.quotadeck')
 let win: BrowserWindow | undefined
 let tray: TrayController | undefined
 let popover: TrayPopover | undefined
+let splash: Splash | undefined
 let backend: Backend
 let quitting = false
 let shortcut = ''
@@ -43,7 +45,7 @@ function resource(...p: string[]): string {
 }
 
 function chromeBackground(): string {
-  return surface(backend?.settings.uiStyle, nativeTheme.shouldUseDarkColors).bg
+  return surface(nativeTheme.shouldUseDarkColors).bg
 }
 
 function showWindow(): void {
@@ -88,7 +90,7 @@ function createWindow(show: boolean): void {
     icon: resource(IS_WIN ? 'icon.ico' : 'icon.png'),
     autoHideMenuBar: true,
     backgroundColor: chromeBackground(),
-    ...titleBarOptions(process.platform, backend?.settings.uiStyle, nativeTheme.shouldUseDarkColors),
+    ...titleBarOptions(process.platform, nativeTheme.shouldUseDarkColors),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -100,7 +102,12 @@ function createWindow(show: boolean): void {
   })
   win.setMenuBarVisibility(false)
   win.once('ready-to-show', () => {
-    if (show) win?.show()
+    if (!show) return
+    // The launch screen fades out first, then the window appears where it was.
+    const s = splash
+    splash = undefined
+    if (s) void s.close().then(() => win?.show())
+    else win?.show()
   })
   win.on('close', (e) => {
     if (!quitting && !DEMO) {
@@ -145,10 +152,10 @@ function applyChrome(): void {
   if (!s) return
   const dark = nativeTheme.shouldUseDarkColors
   if (win && !win.isDestroyed()) {
-    win.setBackgroundColor(surface(s.uiStyle, dark).bg)
-    if (IS_WIN) win.setTitleBarOverlay(titleBarOverlay(s.uiStyle, dark))
+    win.setBackgroundColor(surface(dark).bg)
+    if (IS_WIN) win.setTitleBarOverlay(titleBarOverlay(dark))
   }
-  popover?.setBackground(surface(s.uiStyle, dark).bg)
+  popover?.setBackground(surface(dark).bg)
 }
 
 function setMacMenu(lang: Language): void {
@@ -218,13 +225,23 @@ async function main(): Promise<void> {
         openDesktop: openClaudeDesktop
       })
 
+  // Launch screen, unless the window starts hidden or this is a screenshot run.
+  const startsHidden = START_HIDDEN || openedAtLogin() || (backend.settings.startHidden && !SCREENSHOTS && !CAPTURE)
+  if (!startsHidden && !SCREENSHOTS && !CAPTURE) {
+    nativeTheme.themeSource = backend.settings.theme
+    splash = new Splash({ version: app.getVersion(), lang: backend.settings.language, dark: nativeTheme.shouldUseDarkColors, icon: resource(IS_WIN ? 'icon.ico' : 'icon.png') })
+    splash.show()
+  }
+
   registerIpc(backend, () => win, applySettings)
   ipcMain.handle(IPC.runCommand, (_e, value: unknown) => {
     const cmd = validCommand(value)
     popover?.hide()
     if (cmd) command(cmd)
   })
+  splash?.status('accounts')
   await backend.start()
+  splash?.status('desktop')
   nativeTheme.themeSource = backend.settings.theme
   nativeTheme.on('updated', applyChrome)
 
@@ -259,7 +276,7 @@ async function main(): Promise<void> {
   })
   tray.update(backend.getState())
 
-  const hidden = START_HIDDEN || openedAtLogin() || (backend.settings.startHidden && !SCREENSHOTS && !CAPTURE)
+  const hidden = startsHidden
   createWindow(!hidden)
   if (hidden && IS_MAC && !DEMO) app.dock?.hide()
   applySettings(backend.settings)
@@ -278,6 +295,7 @@ async function main(): Promise<void> {
 
 app.on('before-quit', () => {
   quitting = true
+  splash?.destroy()
   popover?.destroy()
   tray?.destroy()
   void backend?.stop()

@@ -37,8 +37,8 @@ export function defaultSettings(systemLocale = 'en'): Settings {
     acceptedOwnershipNotice: false,
     soundEnabled: true,
     soundVolume: 0.5,
-    uiStyle: 'swiss',
-    accent: 'ikb',
+    accent: 'indigo',
+    density: 'comfortable',
     trayShowPercent: true,
     globalShortcut: 'CommandOrControl+Shift+Q',
     autoCheckUpdates: true

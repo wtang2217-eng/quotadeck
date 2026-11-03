@@ -266,10 +266,10 @@ export interface Settings {
   soundEnabled: boolean
   /** Sound volume, 0-1. */
   soundVolume: number
-  /** Visual style of the whole app. */
-  uiStyle: UiStyle
-  /** Highlight color of the Swiss style. */
+  /** Color for the primary highlight: selection, focus and the account the desktop app is on. */
   accent: AccentChoice
+  /** Row height and spacing: comfortable or compact. */
+  density: Density
   /** macOS: show the desktop account's 5-hour usage next to the menu bar icon. */
   trayShowPercent: boolean
   /** Accelerator that shows or hides the main window from anywhere, e.g. "CommandOrControl+Shift+Q". Empty = off. */
@@ -278,8 +278,9 @@ export interface Settings {
   autoCheckUpdates: boolean
 }
 
-export type UiStyle = 'swiss' | 'editorial' | 'eclipse'
-export type AccentChoice = 'ikb' | 'lemon' | 'green' | 'orange'
+/** indigo, teal and orange are Radix Colors step 9; graphite is the text color itself. */
+export type AccentChoice = 'indigo' | 'teal' | 'orange' | 'graphite'
+export type Density = 'comfortable' | 'compact'
 
 export interface CliInfo {
   found: boolean
@@ -360,7 +361,7 @@ export interface DesktopSwitchOptions {
   cwd?: string
 }
 
-export type Page = 'dashboard' | 'conversations' | 'stats' | 'activity' | 'settings' | 'about' | 'setup'
+export type Page = 'dashboard' | 'stats' | 'conversations' | 'accounts' | 'activity' | 'settings' | 'about' | 'setup'
 
 /** Messages the main process pushes to the renderer besides state updates. */
 export type UiCommand =
