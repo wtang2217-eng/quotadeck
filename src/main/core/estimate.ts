@@ -11,7 +11,7 @@ import type { UsageEstimate } from '@shared/types'
 import type { UsageSample } from './desktop'
 import { readJson, writeJsonAtomic } from './jsonfile'
 import { projectsDir, qdPaths, safeReaddir } from './paths'
-import { costOf, tokensOf } from './pricing'
+import { costOf, tierOf, tokensOf, webSearchesOf, type ReplyUsage } from './pricing'
 
 const MIN = 60_000
 const HOUR = 60 * MIN
@@ -73,6 +73,8 @@ export interface UsageBucket {
   e?: 'd' | 'c'
   /** Organization the desktop app was signed in with when the replies were written. */
   g?: string
+  /** Price tier of the requests (see pricing.tierOf): "" standard, letters f / l / u for fast, long context, US-only. */
+  p?: string
   /** Units and requests, then tokens: input, output, cache read, cache writes (5 min, 1 h); then list-price US dollars. */
   u: number
   n: number
@@ -82,6 +84,8 @@ export interface UsageBucket {
   w5: number
   w1: number
   c: number
+  /** Server-side web searches. */
+  ws?: number
   /** Time of the last reply. */
   t: number
 }
@@ -96,7 +100,7 @@ export interface ScanOptions {
 }
 
 interface ScanState {
-  version: 3
+  version: 4
   cursors: Record<string, { size: number }>
   events: UsageEvent[]
   /** Reply ids already counted (one reply spans several transcript lines), with their time for pruning. */
@@ -158,8 +162,8 @@ export class UsageScanner {
 
   constructor(private readonly file = path.join(qdPaths().root, 'usage-scan.json')) {
     const saved = readJson<ScanState>(file)
-    // Older versions kept no statistics; reading the transcripts again fills them in.
-    this.state = saved?.version === 3 ? saved : { version: 3, cursors: {}, events: [], seen: {}, buckets: {}, projects: {} }
+    // Older versions kept no statistics, or no price tiers; reading the transcripts again fills them in.
+    this.state = saved?.version === 4 ? saved : { version: 4, cursors: {}, events: [], seen: {}, buckets: {}, projects: {} }
   }
 
   get events(): readonly UsageEvent[] {
@@ -254,12 +258,15 @@ export class UsageScanner {
     }
   }
 
-  /** Add one reply to its hourly bucket. */
-  private addToBucket(when: number, session: string, model: string, e: 'd' | 'c' | undefined, usage: Usage, units: number): void {
+  /** Add one reply to its hourly bucket (one per price tier, so costs can be recomputed exactly). */
+  private addToBucket(when: number, session: string, model: string, e: 'd' | 'c' | undefined, usage: ReplyUsage, units: number): void {
     const h = Math.floor(when / HOUR) * HOUR
     const g = this.orgAt?.(when)
-    const key = `${h}|${session}|${model}|${e ?? ''}|${g ?? ''}`
-    const b = (this.state.buckets[key] ??= { h, s: session, m: model, e, g, u: 0, n: 0, i: 0, o: 0, r: 0, w5: 0, w1: 0, c: 0, t: when })
+    const p = tierOf(usage, model)
+    const key = `${h}|${session}|${model}|${e ?? ''}|${g ?? ''}|${p}`
+    const b = (this.state.buckets[key] ??= { h, s: session, m: model, e, g, p: p || undefined, u: 0, n: 0, i: 0, o: 0, r: 0, w5: 0, w1: 0, c: 0, t: when })
+    const ws = webSearchesOf(usage)
+    if (ws) b.ws = (b.ws ?? 0) + ws
     const tok = tokensOf(usage)
     b.u += units
     b.n++
@@ -280,7 +287,7 @@ export class UsageScanner {
     const ts = /"timestamp":"([^"]+)"/.exec(text)
     const t = ts ? Date.parse(ts[1]) : NaN
     if (!text.includes('"usage"') || !text.includes('"type":"assistant"')) return Number.isFinite(t) ? t : undefined
-    let j: { type?: string; timestamp?: string; requestId?: string; entrypoint?: string; sessionId?: string; message?: { id?: string; model?: string; usage?: Usage } }
+    let j: { type?: string; timestamp?: string; requestId?: string; entrypoint?: string; sessionId?: string; message?: { id?: string; model?: string; usage?: ReplyUsage } }
     try {
       j = JSON.parse(text)
     } catch {

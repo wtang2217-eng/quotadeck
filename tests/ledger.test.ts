@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { UsageScanner, type UsageBucket } from '../src/main/core/estimate'
 import { entriesFrom, Ledger, MIRROR_MS } from '../src/main/core/ledger'
+import { PRICE_VERSION } from '../src/main/core/pricing'
 
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
@@ -86,6 +87,53 @@ describe('Ledger', () => {
     const before = fs.statSync(path.join(dir, '2026-11.json')).mtimeMs
     again.save(true)
     expect(fs.statSync(path.join(dir, '2026-11.json')).mtimeMs).toBe(before)
+  })
+
+  it('computes costs again from the stored tokens when the price table changed', () => {
+    const h = Date.UTC(2026, 9, 10, 4)
+    // A file written by an older version: no price version, Sonnet 5.5 cache reads priced at $0.20.
+    const old = { h, a: 'A', s: 's', m: 'claude-sonnet-5-5', i: 0, o: 0, w5: 0, w1: 0, r: 1_000_000, n: 1, c: 0.2, u: 0.02, t: h }
+    fs.writeFileSync(path.join(dir, '2026-10.json'), JSON.stringify({ version: 1, month: '2026-10', entries: [old] }))
+    const ledger = new Ledger(dir)
+    expect(ledger.repriced).toBe(1)
+    expect([...ledger.entries()][0].c).toBeCloseTo(0.1)
+    ledger.save(true)
+    const file = JSON.parse(fs.readFileSync(path.join(dir, '2026-10.json'), 'utf8'))
+    expect(file).toMatchObject({ version: 2, month: '2026-10', priceVersion: PRICE_VERSION })
+    // Read again with the same table: nothing to redo.
+    expect(new Ledger(dir).repriced).toBe(0)
+  })
+
+  it('keeps price tiers apart so each is priced exactly', () => {
+    const h = Date.UTC(2026, 10, 3, 1)
+    const list = entriesFrom([bucket({ h, s: 's', i: 1_000_000, o: 0, r: 0, w5: 0, w1: 0 }), bucket({ h, s: 's', p: 'f', i: 1_000_000, o: 0, r: 0, w5: 0, w1: 0, ws: 2 })], () => 'A').get(h)!
+    expect(list.map((e) => [e.p ?? '', e.c]).sort()).toEqual([
+      ['', 4],
+      ['f', 8.02]
+    ])
+  })
+
+  it('rebuilds an older ledger from the transcripts that still exist, and keeps the rest', () => {
+    const h = Date.UTC(2026, 9, 10, 4)
+    // An older ledger (no schema) with two conversations in one hour.
+    const entry = (s: string, n: number) => ({ h, a: 'A', s, m: 'claude-opus-5-5', i: 10, o: 1, w5: 0, w1: 0, r: 0, n, c: 0, u: 1, t: h })
+    fs.writeFileSync(path.join(dir, '2026-10.json'), JSON.stringify({ version: 1, month: '2026-10', entries: [entry('kept', 5), entry('back', 3)] }))
+    fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ version: 1, sessions: {}, accounts: {} }))
+    const ledger = new Ledger(dir)
+    expect(ledger.needsRebuild).toBe(true)
+    // The transcripts hold all 3 requests of "back" (one of them in fast mode) but only 2 of the 5 of "kept".
+    const fresh = entriesFrom([bucket({ h, s: 'back', n: 2 }), bucket({ h, s: 'back', n: 1, p: 'f' }), bucket({ h, s: 'kept', n: 2 })], () => 'A')
+    expect(ledger.rebuild(fresh)).toEqual({ rebuilt: 3, kept: 5 })
+    const after = [...ledger.entries()]
+    expect(after.filter((e) => e.s === 'back').map((e) => [e.p ?? '', e.n]).sort()).toEqual([
+      ['', 2],
+      ['f', 1]
+    ])
+    expect(after.filter((e) => e.s === 'kept').map((e) => e.n)).toEqual([5])
+    ledger.markRebuilt()
+    expect(ledger.needsRebuild).toBe(false)
+    ledger.save(true)
+    expect(new Ledger(dir).needsRebuild).toBe(false)
   })
 
   it('backfills the whole history on the first scan and keeps what ages out of the scanner', async () => {
