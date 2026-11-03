@@ -6,6 +6,7 @@ import {
   IconBell,
   IconCheck,
   IconCommand,
+  IconDownload,
   IconUpdate,
   IconEye,
   IconFolder,
@@ -140,6 +141,27 @@ export function Settings() {
   useEffect(() => setVolume(Math.round(s.soundVolume * 100)), [s.soundVolume])
 
   const [checking, setChecking] = useState(false)
+  const [imported, setImported] = useState<string | null>(null)
+  const exportSettings = async () => {
+    const res = await api.exportSettings().catch((e) => ({ ok: false, error: errMessage(e), cancelled: false, path: undefined }))
+    if (res.cancelled) return
+    if (res.ok) toast(t('exportDone', { path: res.path ?? '' }), 'ok')
+    else toast(t('errGeneric', { msg: res.error ?? '' }), 'bad')
+  }
+  const importSettings = async () => {
+    try {
+      const res = await api.importSettings()
+      if (res.cancelled) return
+      if (!res.ok) return toast(t('errGeneric', { msg: res.error ?? '' }), 'bad')
+      const a = res.applied ?? { settings: 0, accounts: 0, favorites: 0, orgLabels: 0 }
+      const line = t('setImported', { s: a.settings, a: a.accounts, f: a.favorites, o: a.orgLabels }) + (res.dropped?.length ? ` · ${t('setImportDropped', { list: res.dropped.join(', ') })}` : '')
+      setImported(line)
+      toast(line, 'ok')
+      setState(await api.getState())
+    } catch (e) {
+      toast(t('errGeneric', { msg: errMessage(e) }), 'bad')
+    }
+  }
   const info = state.update
   const updateLine = info?.available
     ? t('setUpdateAvailable', { v: info.latest ?? '' })
@@ -326,6 +348,22 @@ export function Settings() {
             <button type="button" className="btn btn-sm" disabled={checking} onClick={() => void checkNow()}>
               {checking && <Spinner />}
               {t('setCheckNowGo')}
+            </button>
+          </Row>
+          <Row label={t('setServiceStatus')} hint={t('setServiceStatusHint')}>
+            <Toggle label={t('setServiceStatus')} on={s.checkServiceStatus} onChange={(v) => void update({ checkServiceStatus: v })} />
+          </Row>
+        </Section>
+
+        <Section icon={<IconDownload size={16} />} title={t('setBackup')} sub={t('setBackupSub')}>
+          <Row label={t('setExport')} hint={t('setExportHint')}>
+            <button type="button" className="btn btn-sm" onClick={() => void exportSettings()}>
+              {t('setExportGo')}
+            </button>
+          </Row>
+          <Row label={t('setImport')} hint={imported ?? t('setImportHint')}>
+            <button type="button" className="btn btn-sm" onClick={() => void importSettings()}>
+              {t('setImportGo')}
             </button>
           </Row>
         </Section>

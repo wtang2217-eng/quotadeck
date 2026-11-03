@@ -27,6 +27,7 @@ import {
   Logo
 } from './icons'
 import { Menu, type MenuEntry } from './Menu'
+import { serviceProblem } from '../pages/Overview'
 
 const NAV: { page: Page; key: TKey; icon: (p: { size?: number }) => ReactNode }[] = [
   { page: 'dashboard', key: 'navDashboard', icon: IconGrid },
@@ -210,6 +211,18 @@ function Notifications() {
   )
 }
 
+/** Official status, only while something is wrong: amber for minor, red for major. */
+function ServiceDot() {
+  const { state, t, api } = useApp()
+  const p = serviceProblem(state, t as never)
+  if (!p || !state.serviceStatus) return null
+  return (
+    <button type="button" className="icon-btn svc-dot-btn has-tip tip-end" data-tip={p.detail} aria-label={p.detail} onClick={() => void api.openExternal(state.serviceStatus!.url)}>
+      <span className={`svc-dot ${p.tone}`} />
+    </button>
+  )
+}
+
 export function Topbar() {
   const { state, t, page, scope, openPalette } = useApp()
   const scoped = state.accounts.find((a) => a.id === scope)
@@ -227,6 +240,7 @@ export function Topbar() {
         <span>{t('cmdPlaceholder')}</span>
         <span className="kbd">{mod} K</span>
       </button>
+      <ServiceDot />
       <Notifications />
     </div>
   )

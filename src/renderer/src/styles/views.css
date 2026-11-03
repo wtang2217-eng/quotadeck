@@ -116,10 +116,8 @@
 }
 .metric-sub {
   font-size: 12px;
+  line-height: 1.45;
   color: var(--text-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Rolling digits for metric numbers. */
@@ -1326,4 +1324,20 @@
 }
 .meter-cell .meter-reset {
   white-space: nowrap;
+}
+
+/* ---------- Official status ---------- */
+.svc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 22%, transparent);
+}
+.svc-dot.bad {
+  background: var(--bad);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 22%, transparent);
+}
+.svc-notice + .notice {
+  margin-top: -14px;
 }

@@ -361,7 +361,9 @@ function LedgerBody({ stats, group }: { stats: UsageStats; group: Group }) {
           { label: t('lgTokens'), value: formatTokens(sumTokens(total.tokens)) },
           { label: t('lgRequests'), value: total.requests.toLocaleString('en-US') },
           { label: t('lgConversations'), value: total.conversations.toLocaleString('en-US') },
-          { label: t('lgActiveDays'), value: String(total.activeDays) }
+          { label: t('lgActiveDays'), value: String(total.activeDays) },
+          { label: t('lgCacheHit'), value: `${(total.cacheHitRate * 100).toFixed(1)}%` },
+          { label: t('lgCacheSaved'), value: formatUsd(total.cacheSavingsUsd), sub: t('lgNoCache', { usd: formatUsd(total.noCacheUsd) }) }
         ]}
       />
       <div className="note">

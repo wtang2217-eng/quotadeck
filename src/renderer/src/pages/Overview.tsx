@@ -141,6 +141,38 @@ function NoticeBar() {
   return null
 }
 
+/** Anthropic's own status, kept apart from the usage notices: a service problem is not a used-up limit. */
+export function serviceProblem(state: AppState, t: (k: never, v?: Record<string, string | number>) => string): { tone: 'warn' | 'bad'; text: string; detail: string } | undefined {
+  const s = state.serviceStatus
+  if (!s || s.indicator === 'none') return undefined
+  const broken = s.components.filter((c) => c.status !== 'operational')
+  const name = (st: string) => t((`svc_${st}` as never)) || st
+  const first = broken[0]
+  return {
+    tone: s.indicator === 'minor' ? 'warn' : 'bad',
+    text: first ? `${first.name} ${name(first.status)}` : s.description,
+    detail: [s.description, ...broken.map((c) => `${c.name}：${name(c.status)}`)].join('\n')
+  }
+}
+
+function ServiceNotice() {
+  const { state, t, api } = useApp()
+  const p = serviceProblem(state, t as never)
+  if (!p || !state.serviceStatus) return null
+  return (
+    <div className={`notice ${p.tone} svc-notice`} role="status" title={p.detail}>
+      <IconAlert />
+      <span className="notice-text">
+        <b>{t('svcNotice', { what: p.text })}</b>
+      </span>
+      <button type="button" className="btn btn-sm btn-ghost" onClick={() => void api.openExternal(state.serviceStatus!.url)}>
+        {t('svcPage')}
+        <IconArrowRight />
+      </button>
+    </div>
+  )
+}
+
 /** Today's dollars and tokens, this month and everything recorded, for the scope. */
 function OverviewMetrics({ stats }: { stats?: UsageStats }) {
   const { t, lang, tz, now } = useApp()
@@ -152,7 +184,15 @@ function OverviewMetrics({ stats }: { stats?: UsageStats }) {
         items={[
           { label: t('metricTodayUsd'), value: formatUsd(stats?.fixed.todayUsd ?? 0), sub: t('metricAsOf', { clock: formatClock(stats?.computedAt ?? now, tz, lang, now) }) },
           { label: t('metricTodayTokens'), value: formatTokens(todayTokens), sub: t('metricRequests', { n: (today?.requests ?? 0).toLocaleString() }) },
-          { label: t('metricMonthUsd'), value: formatUsd(stats?.fixed.monthUsd ?? 0), sub: t('metricMonth', { m: monthName(now, tz, lang) }) },
+          {
+            label: t('metricMonthUsd'),
+            value: formatUsd(stats?.fixed.monthUsd ?? 0),
+            sub:
+              stats?.subscription.ratio !== undefined
+                ? `${t('subRatio', { plan: formatUsdAxis(stats.subscription.planMonthlyUsd), x: stats.subscription.ratio.toFixed(1) })}${stats.subscription.excluded > 0 ? ` · ${t('subExcluded', { n: stats.subscription.excluded })}` : ''}`
+                : t('metricMonth', { m: monthName(now, tz, lang) }),
+            tip: stats?.subscription.ratio !== undefined ? t('subTip', { usd: formatUsd(stats.subscription.monthUsd), plan: formatUsd(stats.subscription.planMonthlyUsd), asOf: stats.subscription.asOf, source: stats.subscription.source }) : undefined
+          },
           { label: t('metricAllUsd'), value: formatUsd(stats?.fixed.allTimeUsd ?? 0), sub: stats?.firstDay ? t('metricSince', { day: stats.firstDay }) : undefined }
         ]}
       />
@@ -342,6 +382,7 @@ export function Overview() {
         </div>
       </header>
 
+      <ServiceNotice />
       <NoticeBar />
       <OverviewMetrics stats={stats} />
 
