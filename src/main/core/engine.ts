@@ -58,7 +58,7 @@ import { planFrom, planWeight } from './plan'
 import { createProfile, newProfileDir, repairLinks } from './profiles'
 import { startServer, type RunningServer } from './server'
 import { buildChecks, desktopAppInstalled, installClaudeCode, isReady, type CommandRunner } from './setup'
-import { computeStats, ledgerCsv } from './stats'
+import { computeStats, ledgerCsv, type AccountLabel } from './stats'
 import { renderStatusLine } from './statusline'
 import { loadState, saveStateNow, saveStateSoon, type PersistedState } from './store'
 import { compareVersions, fetchLatestRelease } from './updates'
@@ -1231,6 +1231,45 @@ export class Engine extends EventEmitter {
     return (e) => e.a || (e.g ? (orgToAccount.get(e.g) ?? '') : '')
   }
 
+  /** Row of a ledger entry in the statistics: an account, "org:<uuid>" for an organization not in the panel, or "". */
+  private ledgerRows(): (e: LedgerEntry) => string {
+    const account = this.ledgerAccounts()
+    return (e) => account(e) || (e.g ? `org:${e.g}` : '')
+  }
+
+  private orgOrderCache?: { key: string; order: Map<string, number> }
+
+  /** Organizations not in the panel, oldest usage first; their default names are numbered in this order. */
+  private orgOrder(): Map<string, number> {
+    const key = `${this.ledger.revision}|${this.s.accounts.map((a) => a.orgUuid).join(',')}`
+    if (this.orgOrderCache?.key === key) return this.orgOrderCache.order
+    const claimed = new Set(this.s.accounts.map((a) => a.orgUuid).filter(Boolean))
+    const first = new Map<string, number>()
+    for (const e of this.ledger.entries()) {
+      if (e.a || !e.g || claimed.has(e.g)) continue
+      const seen = first.get(e.g)
+      if (seen === undefined || e.h < seen) first.set(e.g, e.h)
+    }
+    const order = new Map([...first].sort((x, y) => x[1] - y[1] || x[0].localeCompare(y[0])).map(([org], i) => [org, i]))
+    this.orgOrderCache = { key, order }
+    return order
+  }
+
+  /** Default name of an organization row: "旧号", then "旧号 2", "旧号 3" … */
+  private orgDefaultName(org: string): string {
+    const i = this.orgOrder().get(org) ?? 0
+    return i === 0 ? this.t('stats.oldAccount') : `${this.t('stats.oldAccount')} ${i + 1}`
+  }
+
+  setOrgLabel(orgUuid: string, label: string): void {
+    const clean = Array.from(label.replace(/\s+/g, ' ').trim()).slice(0, 40).join('').trim()
+    if (clean) this.s.orgLabels[orgUuid] = clean
+    else delete this.s.orgLabels[orgUuid]
+    this.statsCache.clear()
+    saveStateSoon(this.s)
+    this.emitState()
+  }
+
   private lastLedgerMetaAt = 0
 
   /**
@@ -1377,19 +1416,23 @@ export class Engine extends EventEmitter {
 
   // ---------------------------------------------------------------- statistics
 
-  /** Name of an account in the statistics: the current nickname or email, else what the ledger remembers. */
-  private accountLabel = (id: string): { label: string; email?: string } => {
-    if (!id) return { label: this.t('stats.unattributed') }
+  /** Name of a row in the statistics: the account's nickname or email (or what the ledger remembers), an organization's name, or "其他". */
+  private accountLabel = (id: string): AccountLabel => {
+    if (!id) return { label: this.t('stats.other'), kind: 'unknown' }
+    if (id.startsWith('org:')) {
+      const org = id.slice(4)
+      return { label: this.s.orgLabels[org] || this.orgDefaultName(org), kind: 'org', orgUuid: org }
+    }
     const a = this.s.accounts.find((x) => x.id === id)
-    if (a) return { label: accountName(a), email: a.email }
+    if (a) return { label: accountName(a), email: a.email, kind: 'account' }
     const kept = this.ledger.account(id)
-    return { label: kept?.nickname || kept?.email || id.slice(0, 8), email: kept?.email }
+    return { label: kept?.nickname || kept?.email || id.slice(0, 8), email: kept?.email, kind: 'account' }
   }
 
   async getStats(query: StatsQuery): Promise<UsageStats> {
     // Right after the first start the transcripts are still being read (about 10 s for a month); wait for it.
     if (!this.scanner.complete) await this.refreshEstimates()
-    const accountId = query.accountId || 'all'
+    const accountId = query.accountId ?? 'all'
     const key = `${query.range}|${accountId}|${this.settings.timezone}|${this.settings.language}`
     const hit = this.statsCache.get(key)
     if (hit && hit.revision === this.ledger.revision && Date.now() - hit.at < MIN) return hit.value
@@ -1402,7 +1445,7 @@ export class Engine extends EventEmitter {
       accountId,
       now: Date.now(),
       timeZone: this.settings.timezone,
-      accountOf: this.ledgerAccounts(),
+      accountOf: this.ledgerRows(),
       accountLabel: this.accountLabel,
       session: (id) => {
         const t = titles.get(id)
@@ -1427,7 +1470,7 @@ export class Engine extends EventEmitter {
     if (!this.scanner.complete) await this.refreshEstimates()
     const csv = ledgerCsv(
       this.ledger.entries(),
-      { range: query.range, accountId: query.accountId || 'all', now: Date.now(), timeZone: this.settings.timezone, accountOf: this.ledgerAccounts(), accountLabel: this.accountLabel },
+      { range: query.range, accountId: query.accountId ?? 'all', now: Date.now(), timeZone: this.settings.timezone, accountOf: this.ledgerRows(), accountLabel: this.accountLabel },
       this.t('csv.header').split('|')
     )
     const day = new Intl.DateTimeFormat('en-CA', { timeZone: resolveTimeZone(this.settings.timezone), year: 'numeric', month: '2-digit', day: '2-digit' }).format(Date.now())

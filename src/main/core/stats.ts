@@ -17,16 +17,23 @@ export interface SessionInfo {
   lastActivityAt?: number
 }
 
+export interface AccountLabel {
+  label: string
+  email?: string
+  kind: StatsAccount['kind']
+  orgUuid?: string
+}
+
 export interface StatsContext {
   range: StatsRange
-  /** One account id, or "all". */
+  /** "all", one account id, "org:<uuid>", or "" (unknown accounts). */
   accountId: string
   now: number
   /** IANA zone, or "system". */
   timeZone: string
-  /** Account an entry belongs to ("" when unknown). */
+  /** Row an entry belongs to: an account id, "org:<uuid>", or "" when unknown. */
   accountOf: (e: LedgerEntry) => string
-  accountLabel: (id: string) => { label: string; email?: string }
+  accountLabel: (id: string) => AccountLabel
   session: (id: string) => SessionInfo
   partial: boolean
   /** The "list prices, for reference only" sentence in the UI language. */
@@ -113,7 +120,7 @@ const done = <T extends Acc>(x: T): T => ({ ...x, costUsd: r2(x.costUsd), units:
 export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext): UsageStats {
   const tz = resolveTimeZone(ctx.timeZone)
   const clock = zonedClock(tz)
-  const all = ctx.accountId === 'all' || !ctx.accountId
+  const all = ctx.accountId === 'all' || ctx.accountId === undefined
   const nowLocal = clock(ctx.now)
   const today = nowLocal.day
 
@@ -213,6 +220,8 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
   const byAccount: StatsAccount[] = [...accounts]
     .map(([accountId, v]) => ({ accountId, ...ctx.accountLabel(accountId), tokens: v.tokens, costUsd: r2(v.costUsd), requests: v.requests, units: r1(v.units), conversations: v.sessions.size }))
     .sort((x, y) => y.costUsd - x.costUsd)
+  // The total is the sum of the rows as shown, so they always add up to the cent.
+  const sumOf = (k: 'costUsd' | 'units') => byAccount.reduce((s, a) => s + a[k], 0)
 
   return {
     range: ctx.range,
@@ -221,7 +230,7 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
     to: ctx.now,
     timeZone: tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
     firstDay,
-    totals: { ...done(totals), conversations: sessions.size, activeDays: days.filter((d) => d.requests > 0).length },
+    totals: { ...done(totals), costUsd: r2(sumOf('costUsd')), units: r1(sumOf('units')), conversations: sessions.size, activeDays: days.filter((d) => d.requests > 0).length },
     fixed: { todayUsd: r2(fixed.todayUsd), monthUsd: r2(fixed.monthUsd), allTimeUsd: r2(fixed.allTimeUsd) },
     days: days.map((d) => ({ ...done(d), byAccount: Object.fromEntries(Object.entries(d.byAccount).map(([k, v]) => [k, r2(v)])) })),
     hours: hours?.map((h) => ({ ...h, costUsd: r2(h.costUsd) })),
@@ -247,7 +256,7 @@ export function ledgerCsv(entries: Iterable<LedgerEntry>, ctx: Omit<StatsContext
   const firstShown = stats.days[0]?.day ?? ''
   const tz = resolveTimeZone(ctx.timeZone)
   const clock = zonedClock(tz)
-  const all = ctx.accountId === 'all' || !ctx.accountId
+  const all = ctx.accountId === 'all' || ctx.accountId === undefined
   const rows = new Map<string, { day: string; account: string; model: string; v: Acc }>()
   for (const e of entries) {
     const a = ctx.accountOf(e)

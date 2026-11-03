@@ -21,11 +21,16 @@ const TZ_OFFSET = 8 * HOUR
 const HISTORY_DAYS = 75
 
 export interface DemoAccountRef {
+  /** Account id, or "org:<uuid>" for an organization row. */
   id: string
   label: string
-  email: string
+  email?: string
   /** Share of the usage. */
   share: number
+  kind?: 'account' | 'org'
+  orgUuid?: string
+  /** Only used between these many days ago (inclusive), e.g. an account that stopped being used. */
+  activeAgo?: [number, number]
 }
 
 const MODELS: Array<{ model: string; label: string; family: ModelFamily; share: number; price: ModelPrice }> = [
@@ -101,6 +106,7 @@ function cells(accounts: DemoAccountRef[], now: number): Cell[] {
     if (ago === 0) level = 0.95 * doneToday
     const base: TokenTotals = { input: 2_300_000, output: 690_000, cacheWrite5m: 6_900_000, cacheWrite1h: 2_700_000, cacheRead: 104_000_000 }
     for (const a of accounts) {
+      if (a.activeAgo && (ago < a.activeAgo[0] || ago > a.activeAgo[1])) continue
       for (let m = 0; m < MODELS.length; m++) {
         const k = level * a.share * MODELS[m].share * (0.85 + r() * 0.3)
         const tokens = scale(base, k)
@@ -230,16 +236,22 @@ export function demoLedgerStats(
       for (const c of sel) plus(tokens, c.tokens)
       return {
         accountId: a.id,
+        kind: a.kind ?? 'account',
+        orgUuid: a.orgUuid,
         label: a.label,
         email: a.email,
         tokens,
         costUsd: r2(sel.reduce((s, c) => s + c.costUsd, 0)),
         requests: sel.reduce((s, c) => s + c.requests, 0),
         units: r1(sel.reduce((s, c) => s + c.units, 0)),
-        conversations: Math.max(1, Math.round(totals.conversations * (all ? a.share + 0.1 : 1)))
+        conversations: sel.length ? Math.max(1, Math.round(totals.conversations * (all ? a.share + 0.1 : 1))) : 0
       }
     })
+    .filter((a) => a.requests > 0)
     .sort((x, y) => y.costUsd - x.costUsd)
+  // The total is the sum of the rows as shown, as in the real statistics.
+  totals.costUsd = r2(byAccount.reduce((s, a) => s + a.costUsd, 0))
+  totals.units = r1(byAccount.reduce((s, a) => s + a.units, 0))
 
   return {
     range,

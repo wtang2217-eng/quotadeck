@@ -2,7 +2,7 @@
 // Used for README screenshots and for trying the app without any account.
 
 import { EventEmitter } from 'node:events'
-import { demoConversations, demoProjects, demoSetupStatus, demoState, demoStats } from '@shared/demo'
+import { demoConversations, demoProjects, demoSetupStatus, demoState, demoStats, setDemoOrgLabel } from '@shared/demo'
 import type {
   AppState,
   ConversationQuery,
@@ -147,6 +147,11 @@ export class DemoBackend extends EventEmitter implements Backend {
 
   async getStats(query: StatsQuery) {
     return demoStats(this.settings.language, query.range, query.accountId)
+  }
+
+  setOrgLabel(orgUuid: string, label: string): void {
+    setDemoOrgLabel(orgUuid, label)
+    this.push()
   }
 
   async ledgerCsv(query: StatsQuery) {

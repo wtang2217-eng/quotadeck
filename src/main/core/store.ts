@@ -50,6 +50,8 @@ export interface PersistedState {
   /** Last check for a new release, and the newest version already announced. */
   update?: UpdateInfo
   updateNotified?: string
+  /** Names the user gave organizations that are not in the panel (old accounts), by organization uuid. */
+  orgLabels: Record<string, string>
 }
 
 export function freshState(locale: string): PersistedState {
@@ -66,7 +68,8 @@ export function freshState(locale: string): PersistedState {
     hookSignals: [],
     thresholds: {},
     sessionAccounts: {},
-    favorites: []
+    favorites: [],
+    orgLabels: {}
   }
 }
 
@@ -88,7 +91,8 @@ export function loadState(locale: string): PersistedState {
     hookSignals: saved.hookSignals ?? [],
     thresholds: saved.thresholds ?? {},
     sessionAccounts: saved.sessionAccounts ?? {},
-    favorites: Array.isArray(saved.favorites) ? saved.favorites.filter((x): x is string => typeof x === 'string') : []
+    favorites: Array.isArray(saved.favorites) ? saved.favorites.filter((x): x is string => typeof x === 'string') : [],
+    orgLabels: saved.orgLabels && typeof saved.orgLabels === 'object' ? saved.orgLabels : {}
   }
 }
 

@@ -59,6 +59,15 @@ it('engine smoke', async () => {
   t = Date.now()
   const stats = await e.getStats({ range: '7d' })
   console.log('stats 7d ms', Date.now() - t, 'partial', stats.partial, 'totals', JSON.stringify({ usd: stats.totals.costUsd, requests: stats.totals.requests, conversations: stats.totals.conversations }), 'fixed', JSON.stringify(stats.fixed))
+  const everything = await e.getStats({ range: 'all' })
+  console.log(
+    'rows (all)',
+    everything.byAccount.map((a: { kind: string; label: string; email?: string; costUsd: number; requests: number }) => `${a.kind}:${a.kind === 'account' ? mask(a.email) : a.label} $${a.costUsd} ${a.requests}req`),
+    '| total',
+    everything.totals.costUsd,
+    'requests',
+    everything.totals.requests
+  )
   const csv = await e.ledgerCsv({ range: '30d', accountId: 'all' })
   console.log('csv rows (30d, day × account × model)', csv.csv.trimEnd().split('\r\n').length - 1, 'file', csv.fileName)
   t = Date.now()

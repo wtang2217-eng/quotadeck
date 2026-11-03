@@ -187,11 +187,35 @@ export function demoProjects(lang: Language = 'zh-CN', now = Date.now()): Projec
   return [...byCwd.values()].sort((a, b) => b.lastActivityAt - a.lastActivityAt)
 }
 
-/** Believable ledger statistics for screenshots: 75 days, three accounts, four models. */
-export function demoStats(lang: Language = 'zh-CN', range: StatsRange = '7d', accountId?: string, now = Date.now()): UsageStats {
+/** Organization of an old account that is not in the demo panel (used only in the first 40 of the 75 days). */
+export const DEMO_OLD_ORG = 'c3f2e5d4-0000-4000-8000-000000000099'
+
+/** Names given to organization rows in demo mode and in the browser preview. */
+const demoOrgLabels: Record<string, string> = {}
+
+/** Same rules as the app: at most 40 characters; "" restores the default name. */
+export function setDemoOrgLabel(orgUuid: string, label: string): void {
+  const clean = Array.from(label.replace(/\s+/g, ' ').trim()).slice(0, 40).join('').trim()
+  if (clean) demoOrgLabels[orgUuid] = clean
+  else delete demoOrgLabels[orgUuid]
+}
+
+/**
+ * Believable ledger statistics for screenshots: 75 days, three accounts plus an old account that stopped being
+ * used 35 days ago, four models. `orgLabels` are names the user gave organization rows.
+ */
+export function demoStats(lang: Language = 'zh-CN', range: StatsRange = '7d', accountId?: string, now = Date.now(), orgLabels: Record<string, string> = demoOrgLabels): UsageStats {
   const accounts = demoAccounts(lang, now)
   const shares = [0.55, 0.35, 0.1]
-  const refs: DemoAccountRef[] = accounts.map((a, i) => ({ id: a.id, label: a.nickname ?? a.email ?? a.id, email: a.email ?? '', share: shares[i] ?? 0.05 }))
+  const refs: DemoAccountRef[] = accounts.map((a, i) => ({ id: a.id, label: a.nickname ?? a.email ?? a.id, email: a.email, share: shares[i] ?? 0.05 }))
+  refs.push({
+    id: `org:${DEMO_OLD_ORG}`,
+    kind: 'org',
+    orgUuid: DEMO_OLD_ORG,
+    label: orgLabels[DEMO_OLD_ORG] || (lang === 'zh-CN' ? '旧号' : 'Old account'),
+    share: 0.6,
+    activeAgo: [35, 74]
+  })
   return demoLedgerStats(lang, range, accountId, refs, demoConversations(lang, now), now)
 }
 

@@ -1,6 +1,6 @@
 // The demo ledger must look like a real one on every range, because screenshots and the preview are built from it.
 import { describe, expect, it } from 'vitest'
-import { demoSetupStatus, demoState, demoStats } from '../src/shared/demo'
+import { DEMO_OLD_ORG, demoSetupStatus, demoState, demoStats, setDemoOrgLabel } from '../src/shared/demo'
 
 describe('demo statistics', () => {
   const now = Date.UTC(2026, 10, 3, 12, 30)
@@ -14,7 +14,12 @@ describe('demo statistics', () => {
       const sum = s.days.reduce((x, d) => x + d.costUsd, 0)
       expect(Math.abs(sum - s.totals.costUsd)).toBeLessThan(0.05 * days)
       expect(s.models.map((m) => m.label).sort()).toEqual(['Fable 5.1', 'Haiku 5.5', 'Opus 5.5', 'Sonnet 5.5'])
-      expect(s.byAccount).toHaveLength(3)
+      // The old account was only used 35 to 74 days ago, so it only shows on the long ranges.
+      const old = s.byAccount.find((a) => a.kind === 'org')
+      expect(s.byAccount).toHaveLength(range === '90d' || range === 'all' ? 4 : 3)
+      if (old) expect(old).toMatchObject({ accountId: `org:${DEMO_OLD_ORG}`, orgUuid: DEMO_OLD_ORG, label: '旧号' })
+      // The total is exactly the sum of the rows.
+      expect(Math.round(s.byAccount.reduce((x, a) => x + a.costUsd, 0) * 100) / 100).toBe(s.totals.costUsd)
       expect(s.fixed.todayUsd).toBeLessThanOrEqual(s.fixed.monthUsd)
       expect(s.fixed.monthUsd).toBeLessThanOrEqual(s.fixed.allTimeUsd)
       expect(s.heatmap).toHaveLength(7)
@@ -32,6 +37,21 @@ describe('demo statistics', () => {
     expect(one.byAccount.map((a) => a.accountId)).toEqual([ids[1]])
     expect(one.totals.costUsd).toBeLessThan(all.totals.costUsd)
     expect(one.pricing.note).toContain('reference only')
+  })
+
+  it('names the old account, renames it, and filters by it', () => {
+    const before = demoStats('zh-CN', 'all', undefined, now)
+    const old = before.byAccount.find((a) => a.kind === 'org')!
+    expect(old.label).toBe('旧号')
+    setDemoOrgLabel(DEMO_OLD_ORG, '被封的主号')
+    expect(demoStats('zh-CN', 'all', undefined, now).byAccount.find((a) => a.kind === 'org')?.label).toBe('被封的主号')
+    setDemoOrgLabel(DEMO_OLD_ORG, '')
+    expect(demoStats('zh-CN', 'all', undefined, now).byAccount.find((a) => a.kind === 'org')?.label).toBe('旧号')
+    const only = demoStats('zh-CN', 'all', `org:${DEMO_OLD_ORG}`, now)
+    expect(only.byAccount.map((a) => a.accountId)).toEqual([`org:${DEMO_OLD_ORG}`])
+    expect(only.totals.costUsd).toBe(old.costUsd)
+    // Not used in the last 35 days.
+    expect(only.days.slice(-35).every((d) => d.requests === 0)).toBe(true)
   })
 
   it('has a first-start setup checklist and a finished one', () => {
