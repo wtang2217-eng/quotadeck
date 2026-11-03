@@ -4,7 +4,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { app, nativeTheme, type BrowserWindow } from 'electron'
+import { app, BrowserWindow, nativeTheme } from 'electron'
 import type { AccentChoice, Density, Language, Page, Settings, ThemeSetting, UiCommand } from '@shared/types'
 import type { Backend } from './backend'
 import { sendCommand } from './ipc'
@@ -20,23 +20,32 @@ interface Shot {
   prep?: string
   /** Taller window for a whole-page picture. */
   height?: number
+  /** The launch screen or the tray popover instead of a page of the main window. */
+  kind?: 'splash' | 'tray'
   commands: UiCommand[]
 }
 
 const PAGE = (page: Page): UiCommand => ({ type: 'navigate', page })
 
+const LEDGER_30 = "localStorage.setItem('qd.ledger.range', '30d')"
+
+/** README pictures; names match docs/images. Light Chinese is the default, then dark and English variants. */
 const README_SHOTS: Shot[] = [
-  { name: 'dashboard', lang: 'zh-CN', theme: 'light', commands: [PAGE('dashboard')] },
-  { name: 'dashboard-dark', lang: 'zh-CN', theme: 'dark', commands: [PAGE('dashboard')] },
-  { name: 'ledger', lang: 'zh-CN', theme: 'light', commands: [PAGE('stats')] },
-  { name: 'switch', lang: 'zh-CN', theme: 'light', commands: [PAGE('dashboard'), { type: 'open-switch' }] },
+  { name: 'overview', lang: 'zh-CN', theme: 'light', commands: [PAGE('dashboard')] },
+  { name: 'ledger', lang: 'zh-CN', theme: 'light', prep: LEDGER_30, commands: [PAGE('stats')] },
   { name: 'conversations', lang: 'zh-CN', theme: 'light', commands: [PAGE('conversations')] },
-  { name: 'activity', lang: 'zh-CN', theme: 'light', commands: [PAGE('activity')] },
+  { name: 'accounts', lang: 'zh-CN', theme: 'light', commands: [PAGE('accounts')] },
+  { name: 'switch', lang: 'zh-CN', theme: 'light', commands: [PAGE('dashboard'), { type: 'open-switch' }] },
   { name: 'settings', lang: 'zh-CN', theme: 'light', commands: [PAGE('settings')] },
-  { name: 'about', lang: 'zh-CN', theme: 'light', commands: [PAGE('about')] },
-  { name: 'add-account', lang: 'zh-CN', theme: 'light', commands: [PAGE('dashboard'), { type: 'open-add-account' }] },
-  { name: 'dashboard-en', lang: 'en', theme: 'light', commands: [PAGE('dashboard')] },
-  { name: 'dashboard-en-dark', lang: 'en', theme: 'dark', commands: [PAGE('dashboard')] }
+  { name: 'setup', lang: 'zh-CN', theme: 'light', commands: [PAGE('setup')] },
+  { name: 'tray', lang: 'zh-CN', theme: 'light', kind: 'tray', commands: [] },
+  { name: 'splash', lang: 'zh-CN', theme: 'light', kind: 'splash', commands: [] },
+  { name: 'overview-dark', lang: 'zh-CN', theme: 'dark', commands: [PAGE('dashboard')] },
+  { name: 'ledger-dark', lang: 'zh-CN', theme: 'dark', prep: LEDGER_30, commands: [PAGE('stats')] },
+  { name: 'overview.en', lang: 'en', theme: 'light', commands: [PAGE('dashboard')] },
+  { name: 'ledger.en', lang: 'en', theme: 'light', prep: LEDGER_30, commands: [PAGE('stats')] },
+  { name: 'switch.en', lang: 'en', theme: 'light', commands: [PAGE('dashboard'), { type: 'open-switch' }] },
+  { name: 'overview-dark.en', lang: 'en', theme: 'dark', commands: [PAGE('dashboard')] }
 ]
 
 const REVIEW_SHOTS: Shot[] = [
@@ -95,6 +104,15 @@ export async function captureScreenshots(win: BrowserWindow, backend: Backend, o
       ...(shot.density ? { density: shot.density } : {})
     }
     if (Object.keys(patch).length) await backend.updateSettings(patch)
+    if (shot.kind === 'splash') {
+      const png = await captureSplash({ version: app.getVersion(), lang: backend.settings.language, dark: shot.theme === 'dark', step: 'desktop' })
+      fs.writeFileSync(path.join(outDir, `${shot.name}.png`), png)
+      continue
+    }
+    if (shot.kind === 'tray') {
+      fs.writeFileSync(path.join(outDir, `${shot.name}.png`), await captureTray(win))
+      continue
+    }
     if (shot.prep) await win.webContents.executeJavaScript(shot.prep)
     win.setContentSize(1180, shot.height ?? 780)
     await wait(400)
@@ -105,5 +123,26 @@ export async function captureScreenshots(win: BrowserWindow, backend: Backend, o
     await wait(1000)
     const image = await win.webContents.capturePage()
     fs.writeFileSync(path.join(outDir, `${shot.name}.png`), image.toPNG())
+  }
+}
+
+/** The tray popover page in a window of its size, rendered like the real popover (same page, ?view=tray). */
+async function captureTray(main: BrowserWindow): Promise<Buffer> {
+  const win = new BrowserWindow({
+    width: 360,
+    height: 268,
+    show: false,
+    frame: false,
+    webPreferences: { preload: path.join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, backgroundThrottling: false }
+  })
+  try {
+    const url = new URL(main.webContents.getURL())
+    url.searchParams.set('view', 'tray')
+    await win.loadURL(url.toString())
+    await win.webContents.executeJavaScript("document.documentElement.dataset.motion = 'off'; document.documentElement.dataset.capture = '1'")
+    await wait(900)
+    return (await win.webContents.capturePage()).toPNG()
+  } finally {
+    win.destroy()
   }
 }
