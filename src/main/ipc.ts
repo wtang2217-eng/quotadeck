@@ -122,7 +122,13 @@ export function registerIpc(backend: Backend, getWindow: () => BrowserWindow | u
   })
   const statsQuery = (q: { range?: unknown; accountId?: unknown } | undefined): StatsQuery => ({
     range: STATS_RANGES.includes(q?.range as StatsRange) ? (q!.range as StatsRange) : '7d',
-    accountId: str(q?.accountId, 100) || 'all'
+    // "" (unknown accounts) is a real filter; only a missing value means every account.
+    accountId: typeof q?.accountId === 'string' ? q.accountId.slice(0, 100) : 'all'
+  })
+  ipcMain.handle(IPC.setOrgLabel, (_e, orgUuid: unknown, label: unknown) => {
+    const org = str(orgUuid, 100)
+    if (org && /^[0-9a-f-]{36}$/i.test(org)) backend.setOrgLabel(org, str(label, 400) ?? '')
+    return backend.getState()
   })
   ipcMain.handle(IPC.getStats, (_e, q: { range?: unknown; accountId?: unknown } | undefined) => backend.getStats(statsQuery(q)))
   ipcMain.handle(IPC.exportLedgerCsv, async (_e, q: { range?: unknown; accountId?: unknown } | undefined) => {

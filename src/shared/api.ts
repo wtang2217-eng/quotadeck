@@ -78,6 +78,8 @@ export interface QuotaDeckApi {
   getStats(query: StatsQuery): Promise<UsageStats>
   /** Ask where to save, then write one CSV row per day × account × model for the range. */
   exportLedgerCsv(query: StatsQuery): Promise<ExportResult>
+  /** Name an organization row (an old account not in the panel); at most 40 characters, "" restores the default name. */
+  setOrgLabel(orgUuid: string, label: string): Promise<AppState>
 
   // One-click setup
   getSetupStatus(): Promise<SetupStatus>
@@ -135,6 +137,7 @@ export const IPC = {
   exportConversation: 'qd:export-conversation',
   getStats: 'qd:get-stats',
   exportLedgerCsv: 'qd:export-ledger-csv',
+  setOrgLabel: 'qd:set-org-label',
   getSetupStatus: 'qd:get-setup-status',
   runSetup: 'qd:run-setup',
   setupProgress: 'qd:setup-progress',

@@ -41,6 +41,7 @@ const api: QuotaDeckApi = {
 
   getStats: (query) => invoke(IPC.getStats, query),
   exportLedgerCsv: (query) => invoke(IPC.exportLedgerCsv, query),
+  setOrgLabel: (orgUuid, label) => invoke(IPC.setOrgLabel, orgUuid, label),
 
   getSetupStatus: () => invoke(IPC.getSetupStatus),
   runSetup: (opts) => invoke(IPC.runSetup, opts),

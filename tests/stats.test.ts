@@ -76,7 +76,7 @@ describe('computeStats', () => {
     partial: false,
     note: 'note',
     accountOf: (e) => e.a || (e.g === 'orgB' ? 'B' : ''),
-    accountLabel: (id) => (id ? { label: id === 'A' ? '主号' : '副号', email: `${id.toLowerCase()}@example.com` } : { label: '不在面板里的号' }),
+    accountLabel: (id) => (id ? { label: id === 'A' ? '主号' : '副号', email: `${id.toLowerCase()}@example.com`, kind: 'account' } : { label: '其他', kind: 'unknown' }),
     session: (id) => ({ s1: { title: '重构支付', cwd: 'D:\\projects\\shop' }, s2: { title: 'Redis', cwd: 'D:\\projects\\infra' }, s3: { cwd: 'D:\\projects\\shop' } })[id] ?? {}
   }
 
@@ -127,7 +127,7 @@ describe('computeStats', () => {
       ['副号', 1.75, 2]
     ])
     const everything = computeStats(entries, { ...ctx, range: 'all' })
-    expect(everything.byAccount.find((a) => a.accountId === '')).toMatchObject({ label: '不在面板里的号', costUsd: 3 })
+    expect(everything.byAccount.find((a) => a.accountId === '')).toMatchObject({ label: '其他', kind: 'unknown', costUsd: 3 })
   })
 
   it('filters by account, fixed totals included', () => {
@@ -150,7 +150,7 @@ describe('computeStats', () => {
     ])
     expect(ledgerCsv(entries, { ...ctx, range: 'all' }, header).trimEnd().split('\r\n')).toHaveLength(6)
     // Commas and quotes in a name are quoted.
-    const odd = ledgerCsv(entries.slice(0, 1), { ...ctx, range: '7d', accountLabel: () => ({ label: 'a, "b"' }) }, header)
+    const odd = ledgerCsv(entries.slice(0, 1), { ...ctx, range: '7d', accountLabel: () => ({ label: 'a, "b"', kind: 'account' }) }, header)
     expect(odd.split('\r\n')[1]).toContain('"a, ""b"""')
   })
 

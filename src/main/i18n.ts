@@ -105,7 +105,8 @@ const zh = {
   'setup.skipped': '不需要',
   'setup.busy': '已经在配置了',
   'stats.note': '按 API 标价折算，仅供参考，订阅不按这个扣费',
-  'stats.unattributed': '不在面板里的号',
+  'stats.other': '其他',
+  'stats.oldAccount': '旧号',
   'csv.header': '日期|账号|邮箱|模型|输入 token|输出 token|缓存写入 token（5 分钟）|缓存写入 token（1 小时）|缓存读取 token|请求次数|按 API 标价折算（美元）',
   'csv.fileName': 'QuotaDeck 用量账本 {day}'
 }
@@ -213,7 +214,8 @@ const en: Record<keyof typeof zh, string> = {
   'setup.skipped': 'Not needed',
   'setup.busy': 'Setup is already running',
   'stats.note': 'At API list prices, for reference only; subscriptions are not billed this way',
-  'stats.unattributed': 'Accounts not in QuotaDeck',
+  'stats.other': 'Other',
+  'stats.oldAccount': 'Old account',
   'csv.header': 'Date|Account|Email|Model|Input tokens|Output tokens|Cache write tokens (5 min)|Cache write tokens (1 h)|Cache read tokens|Requests|At API list prices (USD)',
   'csv.fileName': 'QuotaDeck usage ledger {day}'
 }

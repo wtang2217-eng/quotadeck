@@ -486,7 +486,7 @@ export type StatsRange = 'today' | '7d' | '30d' | '90d' | 'all'
 
 export interface StatsQuery {
   range: StatsRange
-  /** One account id, or "all" (the default) for every account. */
+  /** "all" (the default), one account id, "org:<uuid>" for one organization row, or "" for the usage of unknown accounts. */
   accountId?: string
 }
 
@@ -574,9 +574,19 @@ export interface StatsConversation {
 }
 
 export interface StatsAccount {
-  /** "" = requests that could not be attributed to any of your accounts. */
+  /**
+   * An account id (kind "account"); "org:<uuid>" for usage of an organization that is not in the panel, such as an
+   * account you no longer use (kind "org"); "" for usage whose account cannot be told (kind "unknown").
+   */
   accountId: string
-  /** Nickname or email; kept in the ledger, so removed accounts still have a name. */
+  kind: 'account' | 'org' | 'unknown'
+  /** For kind "org": the organization, to rename it with setOrgLabel. */
+  orgUuid?: string
+  /**
+   * Nickname or email (kept in the ledger, so removed accounts still have a name). For an organization, the name
+   * the user gave it, else "旧号" / "Old account", numbered "旧号 2", "旧号 3" … when there are several. "其他" / "Other"
+   * for kind "unknown".
+   */
   label: string
   email?: string
   tokens: TokenTotals

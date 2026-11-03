@@ -2,7 +2,7 @@
 // Query parameters for previewing states: ?lang=en ?theme=dark ?style=swiss|editorial|eclipse ?accent=ikb|lemon|green|orange ?empty=1 ?conflict=1 ?warn=1 ?dup=1 ?ratio=1 ?page=settings ?dialog=switch|add ?still=1
 
 import type { QuotaDeckApi } from '@shared/api'
-import { demoConversations, demoProjects, demoSetupStatus, demoState, demoStats } from '@shared/demo'
+import { demoConversations, demoProjects, demoSetupStatus, demoState, demoStats, setDemoOrgLabel } from '@shared/demo'
 import type { ActivityEvent, AppState, Language, LoginProgress, MergeStatus, Page, PendingSwitch, Settings, SetupProgress, StatsQuery, UiCommand } from '@shared/types'
 
 type Listener<T> = (v: T) => void
@@ -358,6 +358,12 @@ export function createMockApi(): QuotaDeckApi {
     async checkForUpdates() {
       await wait(500)
       return clone(state.update ?? { current: state.appVersion, available: false, checkedAt: Date.now() })
+    },
+    async setOrgLabel(orgUuid: string, label: string) {
+      setDemoOrgLabel(orgUuid, label)
+      log('setOrgLabel', orgUuid, label)
+      emit()
+      return clone(state)
     }
   }
 
