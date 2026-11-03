@@ -81,12 +81,21 @@ export function TrayView({ api }: { api: QuotaDeckApi }) {
             {t('trayOpen')}
           </button>
           <span className="grow" />
-          {rec && (
-            <button type="button" className="btn btn-sm btn-primary" onClick={() => void api.runCommand?.({ type: 'open-switch', toAccountId: rec.id })}>
-              {t('adviceAct', { name: displayName(rec) })}
-              <IconArrowRight />
-            </button>
-          )}
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() =>
+              void api.runCommand?.(
+                state.lastInterrupted?.cliSessionId ? { type: 'open-switch', cliSessionId: state.lastInterrupted.cliSessionId } : { type: 'navigate', page: 'conversations' }
+              )
+            }
+          >
+            {t('trayContinue')}
+          </button>
+          <button type="button" className="btn btn-sm btn-primary" onClick={() => void api.runCommand?.({ type: 'open-switch', toAccountId: rec?.id })}>
+            {t('noticeSwitch')}
+            <IconArrowRight />
+          </button>
         </div>
       </div>
     </Ctx.Provider>
