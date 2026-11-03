@@ -21,7 +21,7 @@ import type {
 const MIN = 60_000
 const HOUR = 60 * MIN
 /** Version shown in demo mode (screenshots). */
-export const DEMO_VERSION = '0.2.0'
+export const DEMO_VERSION = '0.2.1'
 
 /** Deterministic pseudo-random numbers so screenshots are stable. */
 function rng(seed: number): () => number {

@@ -1,7 +1,7 @@
 {
   "name": "quotadeck",
   "productName": "QuotaDeck",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A local, unofficial multi-account panel for Claude Code and the Claude desktop app: see each account's plan and usage, get notified at the limit, switch with one click and keep your conversations.",
   "main": "./out/main/index.js",
   "author": "wtang2217-eng",
