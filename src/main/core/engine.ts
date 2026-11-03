@@ -58,7 +58,7 @@ import { planFrom, planWeight } from './plan'
 import { createProfile, newProfileDir, repairLinks } from './profiles'
 import { startServer, type RunningServer } from './server'
 import { buildChecks, desktopAppInstalled, installClaudeCode, isReady, type CommandRunner } from './setup'
-import { computeStats, ledgerCsv, type AccountLabel } from './stats'
+import { computeStats, folderName, ledgerCsv, type AccountLabel } from './stats'
 import { renderStatusLine } from './statusline'
 import { loadState, saveStateNow, saveStateSoon, type PersistedState } from './store'
 import { compareVersions, fetchLatestRelease } from './updates'
@@ -1428,7 +1428,7 @@ export class Engine extends EventEmitter {
     const byKey = new Map<string, ProjectItem>()
     for (const t of listTranscripts()) {
       const key = t.cwd ? normalizeDir(t.cwd) : `dir:${t.projectDir}`
-      const name = t.cwd ? path.basename(t.cwd.replace(/[\\/]+$/, '')) || t.cwd : t.projectDir
+      const name = t.cwd ? folderName(t.cwd) : t.projectDir
       const p = byKey.get(key) ?? { cwd: t.cwd, projectDir: t.projectDir, name, conversations: 0, lastActivityAt: 0 }
       p.conversations++
       p.lastActivityAt = Math.max(p.lastActivityAt, t.lastActivityAt)

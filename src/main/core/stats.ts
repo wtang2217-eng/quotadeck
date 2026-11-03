@@ -1,7 +1,6 @@
 // The statistics page and the CSV export: the ledger summed per day, hour, model, project, conversation and
 // account, with days and hours in the time zone the user chose.
 
-import path from 'node:path'
 import { resolveTimeZone } from '@shared/format'
 import type { StatsAccount, StatsConversation, StatsModel, StatsProject, StatsRange, TokenTotals, UsageStats } from '@shared/types'
 import type { LedgerEntry } from './ledger'
@@ -203,7 +202,7 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
     const info = ctx.session(id)
     const projectDir = info.projectDir ?? ''
     const key = (info.cwd ?? projectDir).replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase()
-    const name = info.cwd ? path.basename(info.cwd.replace(/[\\/]+$/, '')) || info.cwd : projectDir || '?'
+    const name = info.cwd ? folderName(info.cwd) : projectDir || '?'
     const p = projects.get(key) ?? { cwd: info.cwd, projectDir, name, ...acc(), conversations: 0 }
     addTokens(p.tokens, { i: s.tokens.input, o: s.tokens.output, w5: s.tokens.cacheWrite5m, w1: s.tokens.cacheWrite1h, r: s.tokens.cacheRead })
     p.costUsd += s.costUsd
@@ -305,4 +304,9 @@ export function ledgerCsv(
     lines.push([r.day, who.label, who.email ?? '', r.model, type, t.input, t.output, t.cacheWrite5m, t.cacheWrite1h, t.cacheRead, r.v.requests, r2(r.v.costUsd).toFixed(2)].map(csvCell).join(','))
   }
   return lines.join('\r\n') + '\r\n'
+}
+
+/** Last folder of a path written on any system: "D:\work\shop" and "/home/me/shop" both give "shop". */
+export function folderName(cwd: string): string {
+  return cwd.split(/[\\/]+/).filter(Boolean).pop() || cwd
 }
