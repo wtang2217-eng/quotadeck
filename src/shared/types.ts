@@ -99,6 +99,8 @@ export interface AccountView extends Account {
   usage?: UsageSnapshot
   /** Present when the account was used since its last real record. */
   estimate?: UsageEstimate
+  /** When the account will run out at the recent pace. Only present while it is being used. */
+  eta?: UsageEta
   /** Up to 7 days of history, oldest first. */
   history: UsagePoint[]
   /** Set while the account is blocked by a limit that has not reset yet. */
@@ -141,7 +143,45 @@ export interface ConversationItem {
   entrypoint?: string
   /** Ids of your accounts whose desktop list contains this conversation. */
   desktopAccountIds: string[]
+  /** Ids of your accounts that ran replies in this conversation (last 31 days of usage), most used first. */
+  accountIds: string[]
+  /** The desktop app's id for it ("local_<uuid>"), when it is in a desktop list. Needed to open it there. */
+  desktopSessionId?: string
+  /** Starred by the user. */
+  favorite: boolean
   sizeBytes: number
+}
+
+export interface ConversationQuery {
+  /** Matches the title, first and last prompt, and folder. */
+  search?: string
+  limit?: number
+  /** Only conversations whose working folder is this path. */
+  cwd?: string
+  /** Only conversations this account ran replies in. */
+  accountId?: string
+  /** "desktop": started in the desktop app; "terminal": everything else. */
+  entrypoint?: 'desktop' | 'terminal'
+  favoritesOnly?: boolean
+}
+
+/** A working folder that has conversations, for the project filter. */
+export interface ProjectItem {
+  /** Working folder, when a transcript recorded it. */
+  cwd?: string
+  /** Folder name under ~/.claude/projects. */
+  projectDir: string
+  /** Last part of the folder path, for display. */
+  name: string
+  conversations: number
+  lastActivityAt: number
+}
+
+export interface ExportResult extends ActionResult {
+  /** Where the Markdown file was saved. */
+  path?: string
+  /** The user closed the save dialog. */
+  cancelled?: boolean
 }
 
 export type ActivityType =
@@ -234,6 +274,8 @@ export interface Settings {
   trayShowPercent: boolean
   /** Accelerator that shows or hides the main window from anywhere, e.g. "CommandOrControl+Shift+Q". Empty = off. */
   globalShortcut: string
+  /** Look for a new QuotaDeck release on GitHub at start and every 12 hours. */
+  autoCheckUpdates: boolean
 }
 
 export type UiStyle = 'swiss' | 'editorial' | 'eclipse'
@@ -263,6 +305,12 @@ export interface AppState {
   events: ActivityEvent[]
   /** The most recent conversation that was interrupted by a limit, used by the switch dialog. */
   lastInterrupted?: { accountId?: string; cliSessionId?: string; cwd?: string; title?: string; at: number }
+  /** First start, or nothing set up yet: the UI opens the setup page by itself. */
+  needsSetup: boolean
+  /** A desktop switch the user started and QuotaDeck is waiting to see finish. */
+  pendingSwitch?: PendingSwitch
+  /** Result of the last check for a new QuotaDeck version. */
+  update?: UpdateInfo
 }
 
 export type LoginPhase = 'starting' | 'waiting-browser' | 'verifying' | 'done' | 'failed' | 'cancelled'
@@ -299,12 +347,242 @@ export interface DesktopSwitchResult extends ActionResult {
   copied: number
   /** Email of the target account, for the sign-in instructions. */
   targetEmail?: string
+  /** The switch QuotaDeck now waits for (absent when the desktop app is already on the target). */
+  pending?: PendingSwitch
 }
 
-export type Page = 'dashboard' | 'conversations' | 'activity' | 'settings' | 'about'
+/** What the switch dialog knows when it starts a desktop switch. */
+export interface DesktopSwitchOptions {
+  fromAccountId?: string
+  /** The conversation to continue after signing in. Defaults to the one a limit interrupted. */
+  cliSessionId?: string
+  title?: string
+  cwd?: string
+}
+
+export type Page = 'dashboard' | 'conversations' | 'stats' | 'activity' | 'settings' | 'about' | 'setup'
 
 /** Messages the main process pushes to the renderer besides state updates. */
 export type UiCommand =
   | { type: 'navigate'; page: Page }
-  | { type: 'open-switch'; fromAccountId?: string; toAccountId?: string }
+  | { type: 'open-switch'; fromAccountId?: string; toAccountId?: string; cliSessionId?: string }
   | { type: 'open-add-account' }
+
+// ---------------------------------------------------------------- run-out forecast
+
+export interface UsageEta {
+  /** When the 5-hour window reaches 100% at the recent pace. Only set when that is before the window resets. */
+  fiveHourFullAt?: number
+  /** Same for the weekly window. */
+  sevenDayFullAt?: number
+  /** Recent pace in percent per hour, for tooltips. */
+  fiveHourPerHour?: number
+  sevenDayPerHour?: number
+  /** "estimate": from the tokens your conversations used and the learned rate; "records": from recorded percentages. */
+  basis: 'estimate' | 'records'
+  at: number
+}
+
+// ---------------------------------------------------------------- desktop switch follow-up
+
+export interface PendingSwitch {
+  id: string
+  fromAccountId?: string
+  toAccountId: string
+  /** The conversation to continue once the desktop app is signed in with the target. */
+  conversation?: {
+    cliSessionId?: string
+    /** The desktop app's id ("local_<uuid>"); lets the UI open it directly. */
+    desktopSessionId?: string
+    title?: string
+    cwd?: string
+    /** The conversation is in the target account's desktop list. */
+    inTargetList?: boolean
+  }
+  startedAt: number
+  /**
+   * waiting: QuotaDeck is watching for the sign-in. done: the desktop app is now on the target.
+   * wrong-account: it signed in with another account. expired: nothing happened within 30 minutes.
+   */
+  phase: 'waiting' | 'done' | 'wrong-account' | 'expired'
+  finishedAt?: number
+  /** Account the desktop app signed in with when it is not the target (undefined when it is not one of yours). */
+  actualAccountId?: string
+  /** The continue prompt was put on the clipboard. */
+  copiedPrompt?: boolean
+}
+
+// ---------------------------------------------------------------- one-click setup
+
+export type SetupCheckId = 'desktop-installed' | 'desktop-signed-in' | 'cli' | 'git-bash' | 'main-account' | 'integration' | 'open-at-login'
+
+/** ok: done. fixable: the setup button does it. manual: needs the user (see action/url). missing: not available here. */
+export type SetupCheckState = 'ok' | 'fixable' | 'manual' | 'missing'
+
+export type SetupAction =
+  | 'install-cli'
+  | 'adopt-main'
+  | 'add-account'
+  | 'connect'
+  | 'open-at-login'
+  | 'download-desktop'
+  | 'open-desktop'
+  | 'download-git'
+
+export interface SetupCheck {
+  id: SetupCheckId
+  state: SetupCheckState
+  /** Localized title, e.g. "Claude Code 命令行". */
+  title: string
+  /** Localized explanation of the current state and of what the fix does. */
+  detail: string
+  /** QuotaDeck's main features work without it. */
+  optional: boolean
+  /** What fixes it: done by runSetup when "fixable", a button for the user when "manual". */
+  action?: SetupAction
+  /** Page to open for a manual step (downloads). */
+  url?: string
+}
+
+export interface SetupStatus {
+  checks: SetupCheck[]
+  /** Every required check is ok. */
+  ready: boolean
+  /** Same as AppState.needsSetup. */
+  needsSetup: boolean
+  /** A runSetup is in progress. */
+  running: boolean
+}
+
+export interface SetupOptions {
+  /** Install Claude Code with the official installer when it is missing. */
+  installCli: boolean
+  /** Add the hooks and status line to ~/.claude/settings.json. */
+  connectIntegration: boolean
+  /** Start QuotaDeck when you sign in to the computer. */
+  openAtLogin: boolean
+}
+
+export interface SetupProgress {
+  runId: string
+  /** The step this message is about; absent on the final message. */
+  step?: SetupCheckId
+  phase: 'running' | 'ok' | 'failed' | 'skipped' | 'done'
+  /** Localized status text, or one line of installer output. */
+  message?: string
+  /** Set on the final message ("done"). */
+  ok?: boolean
+  status?: SetupStatus
+}
+
+// ---------------------------------------------------------------- usage statistics
+
+export type StatsRange = '7d' | '30d'
+
+export interface StatsQuery {
+  range: StatsRange
+  /** Only this account. */
+  accountId?: string
+}
+
+export interface TokenTotals {
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+}
+
+export interface StatsDay {
+  /** YYYY-MM-DD in the chosen time zone. */
+  day: string
+  tokens: TokenTotals
+  /** Cost-weighted usage units (the same units the live estimate uses). */
+  units: number
+  /** What the same tokens would cost at API list prices. */
+  costUsd: number
+  replies: number
+  /** Units per account id ("" for replies that could not be attributed). */
+  byAccount: Record<string, number>
+}
+
+export type ModelFamily = 'fable' | 'opus' | 'sonnet' | 'haiku' | 'other'
+
+export interface StatsModel {
+  /** e.g. "claude-opus-5-5". */
+  model: string
+  /** e.g. "Opus 5.5". */
+  label: string
+  family: ModelFamily
+  tokens: TokenTotals
+  units: number
+  costUsd: number
+  replies: number
+}
+
+export interface StatsProject {
+  cwd?: string
+  projectDir: string
+  name: string
+  units: number
+  costUsd: number
+  replies: number
+  conversations: number
+}
+
+export interface StatsConversation {
+  cliSessionId: string
+  title: string
+  cwd?: string
+  /** Account that ran most of it. */
+  accountId?: string
+  tokens: TokenTotals
+  units: number
+  costUsd: number
+  replies: number
+  lastActivityAt: number
+}
+
+export interface UsageStats {
+  range: StatsRange
+  accountId?: string
+  /** Start of the first day, and the time the numbers were computed. */
+  from: number
+  to: number
+  /** Time zone the days and the heatmap use. */
+  timeZone: string
+  totals: { tokens: TokenTotals; units: number; costUsd: number; replies: number; conversations: number; activeDays: number }
+  /** Every day of the range, oldest first, including empty days. */
+  days: StatsDay[]
+  /** Most used first. */
+  models: StatsModel[]
+  /** Most used first, at most 12. */
+  projects: StatsProject[]
+  /** heatmap[weekday][hour] = units; weekday 0 = Monday. */
+  heatmap: number[][]
+  /** Most used first, at most 10. */
+  topConversations: StatsConversation[]
+  /** Units, cost and replies per account id ("" = not attributed). */
+  byAccount: Array<{ accountId: string; units: number; costUsd: number; replies: number }>
+  pricing: {
+    /** Date of the price list used, YYYY-MM-DD. */
+    asOf: string
+    currency: 'USD'
+  }
+  /** Transcripts are still being read for the first time; numbers will grow. */
+  partial: boolean
+  computedAt: number
+}
+
+// ---------------------------------------------------------------- updates
+
+export interface UpdateInfo {
+  current: string
+  /** Newest release on GitHub, without the "v". */
+  latest?: string
+  available: boolean
+  /** Release page. */
+  url?: string
+  notes?: string
+  publishedAt?: number
+  checkedAt?: number
+}

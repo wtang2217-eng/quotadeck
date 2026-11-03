@@ -40,6 +40,7 @@ export function defaultSettings(systemLocale = 'en'): Settings {
     uiStyle: 'swiss',
     accent: 'ikb',
     trayShowPercent: true,
-    globalShortcut: 'CommandOrControl+Shift+Q'
+    globalShortcut: 'CommandOrControl+Shift+Q',
+    autoCheckUpdates: true
   }
 }

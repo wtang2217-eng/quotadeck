@@ -28,10 +28,25 @@ const api: QuotaDeckApi = {
   removeAccount: (accountId, opts) => invoke(IPC.removeAccount, accountId, opts),
 
   continueInTerminal: (req) => invoke(IPC.continueInTerminal, req),
-  prepareDesktopSwitch: (toAccountId) => invoke(IPC.prepareDesktopSwitch, toAccountId),
+  prepareDesktopSwitch: (toAccountId, opts) => invoke(IPC.prepareDesktopSwitch, toAccountId, opts),
+  cancelPendingSwitch: () => invoke(IPC.cancelPendingSwitch),
+  onSwitchProgress: (cb) => subscribe(IPC.switchProgress, cb),
   openDesktopApp: () => invoke(IPC.openDesktopApp),
+  openInDesktop: (target) => invoke(IPC.openInDesktop, target),
 
   listConversations: (query) => invoke(IPC.listConversations, query),
+  listProjects: () => invoke(IPC.listProjects),
+  setFavorite: (cliSessionId, favorite) => invoke(IPC.setFavorite, cliSessionId, favorite),
+  exportConversation: (cliSessionId) => invoke(IPC.exportConversation, cliSessionId),
+
+  getStats: (query) => invoke(IPC.getStats, query),
+
+  getSetupStatus: () => invoke(IPC.getSetupStatus),
+  runSetup: (opts) => invoke(IPC.runSetup, opts),
+  onSetupProgress: (cb) => subscribe(IPC.setupProgress, cb),
+  dismissSetup: () => invoke(IPC.dismissSetup),
+
+  checkForUpdates: () => invoke(IPC.checkForUpdates),
 
   runMergeNow: () => invoke(IPC.runMergeNow),
   undoMerge: () => invoke(IPC.undoMerge),

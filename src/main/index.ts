@@ -132,7 +132,7 @@ function notify(n: Notice): void {
   note.on('close', release)
   note.on('click', () => {
     release()
-    if (n.action?.type === 'open-switch') command({ type: 'open-switch', fromAccountId: n.action.fromAccountId, toAccountId: n.action.toAccountId })
+    if (n.action?.type === 'open-switch') command({ type: 'open-switch', fromAccountId: n.action.fromAccountId, toAccountId: n.action.toAccountId, cliSessionId: n.action.cliSessionId })
     else if (n.action?.type === 'navigate') command({ type: 'navigate', page: n.action.page })
     else showWindow()
   })
@@ -193,7 +193,7 @@ function validCommand(value: unknown): UiCommand | undefined {
   const c = value as Record<string, unknown>
   const id = (v: unknown) => (typeof v === 'string' && v.length <= 100 ? v : undefined)
   if (c.type === 'navigate' && typeof c.page === 'string' && /^[a-z-]{1,40}$/.test(c.page)) return { type: 'navigate', page: c.page as Page }
-  if (c.type === 'open-switch') return { type: 'open-switch', fromAccountId: id(c.fromAccountId), toAccountId: id(c.toAccountId) }
+  if (c.type === 'open-switch') return { type: 'open-switch', fromAccountId: id(c.fromAccountId), toAccountId: id(c.toAccountId), cliSessionId: id(c.cliSessionId) }
   if (c.type === 'open-add-account') return { type: 'open-add-account' }
   return undefined
 }

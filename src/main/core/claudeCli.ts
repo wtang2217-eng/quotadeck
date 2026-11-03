@@ -24,11 +24,28 @@ export async function findClaude(force = false): Promise<CliInfo> {
   }
   let found = candidates.find((c) => fs.existsSync(c))
   if (!found) found = await whichClaude()
+  // Apps opened from Finder or a desktop launcher get a minimal PATH; the user's login shell knows the real one.
+  if (!found && !IS_WIN) found = await loginShellClaude()
   if (!found) return (cachedCli = { found: false })
   const version = await run(found, ['--version'], envForConfigDir(undefined), 15_000)
     .then((r) => /(\d+\.\d+\.\d+)/.exec(r.stdout)?.[1])
     .catch(() => undefined)
   return (cachedCli = { found: true, path: found, version })
+}
+
+/** `command -v claude` in the user's login shell (macOS / Linux), with a 3 second limit. */
+export function loginShellClaude(shell = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'), timeoutMs = 3000): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    execFile(shell, ['-ilc', 'command -v claude'], { windowsHide: true, timeout: timeoutMs, env: { ...process.env, TERM: 'dumb' } }, (err, stdout) => {
+      if (err) return resolve(undefined)
+      const line = stdout
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .reverse()
+        .find((s) => s.startsWith('/'))
+      resolve(line && fs.existsSync(line) ? line : undefined)
+    })
+  })
 }
 
 function whichClaude(): Promise<string | undefined> {

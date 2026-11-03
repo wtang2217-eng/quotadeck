@@ -2,7 +2,7 @@
 
 import crypto from 'node:crypto'
 import { defaultSettings } from '@shared/defaults'
-import type { Account, ActivityEvent, AppState, LimitInfo, Settings, UsageSnapshot } from '@shared/types'
+import type { Account, ActivityEvent, AppState, LimitInfo, PendingSwitch, Settings, UpdateInfo, UsageSnapshot } from '@shared/types'
 import { readJson, writeJsonAtomic } from './jsonfile'
 import { emptyManifest, type MergeManifest } from './merge'
 import { qdPaths } from './paths'
@@ -34,13 +34,22 @@ export interface PersistedState {
   }
   /** Recent StopFailure calls from desktop sessions, used to tell which account the app is signed in with. */
   hookSignals: HookSignal[]
-  /** Thresholds already announced, per account id and window, so each fires once. */
-  thresholds: Record<string, { fh?: number; sd?: number }>
+  /** Thresholds already announced, per account id and window, so each fires once. `eta` = when "full soon" was sent. */
+  thresholds: Record<string, { fh?: number; sd?: number; eta?: number }>
   lastInterrupted?: AppState['lastInterrupted']
   /** Last daily `claude auth status` sweep. */
   lastLoginCheckAt?: number
   /** Sessions QuotaDeck opened in a terminal, and as which account. */
   sessionAccounts: Record<string, { accountId: string; at: number }>
+  /** Starred conversations (Claude Code session ids). */
+  favorites: string[]
+  /** The desktop switch being watched. */
+  pendingSwitch?: PendingSwitch
+  /** The user finished or closed the setup page. */
+  setupDismissedAt?: number
+  /** Last check for a new release, and the newest version already announced. */
+  update?: UpdateInfo
+  updateNotified?: string
 }
 
 export function freshState(locale: string): PersistedState {
@@ -56,7 +65,8 @@ export function freshState(locale: string): PersistedState {
     integration: { key: crypto.randomBytes(18).toString('base64url') },
     hookSignals: [],
     thresholds: {},
-    sessionAccounts: {}
+    sessionAccounts: {},
+    favorites: []
   }
 }
 
@@ -77,7 +87,8 @@ export function loadState(locale: string): PersistedState {
     events: saved.events ?? [],
     hookSignals: saved.hookSignals ?? [],
     thresholds: saved.thresholds ?? {},
-    sessionAccounts: saved.sessionAccounts ?? {}
+    sessionAccounts: saved.sessionAccounts ?? {},
+    favorites: Array.isArray(saved.favorites) ? saved.favorites.filter((x): x is string => typeof x === 'string') : []
   }
 }
 
