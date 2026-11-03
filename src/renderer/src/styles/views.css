@@ -1,0 +1,780 @@
+/* Overview, ledger and switch dialog: notice bar, metric strip, tables with inline meters, charts, heatmap. */
+
+/* ---------- Notice bar: only when something needs a decision ---------- */
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  margin: -6px 0 22px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--hover);
+  font-size: 13px;
+  color: var(--text-1);
+  animation: rise var(--t-slow) var(--ease) both;
+}
+.notice > svg {
+  flex: none;
+  color: var(--text-3);
+}
+.notice.bad {
+  border-color: var(--bad-line);
+  background: var(--bad-soft);
+}
+.notice.bad > svg {
+  color: var(--bad-text);
+}
+.notice.warn {
+  border-color: var(--warn-line);
+  background: var(--warn-soft);
+}
+.notice.warn > svg {
+  color: var(--warn-text);
+}
+.notice.accent {
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--line));
+  background: var(--accent-soft);
+}
+.notice.accent > svg {
+  color: var(--accent-text);
+}
+.notice-text {
+  flex: 1;
+  min-width: 0;
+}
+.notice-text b {
+  font-weight: 600;
+}
+.notice-text .muted {
+  margin-left: 6px;
+}
+
+/* ---------- Advice: the one sentence under the title ---------- */
+.advice {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+.advice b {
+  color: var(--text-1);
+  font-weight: 600;
+}
+.advice .linkish {
+  font-size: 13.5px;
+}
+
+/* ---------- Metric strip ---------- */
+.metrics {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 20px 16px;
+  min-width: 0;
+}
+.metric:first-child {
+  padding-left: 0;
+}
+.metric + .metric {
+  border-left: 1px solid var(--line);
+}
+.metric-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.metric-value {
+  font-size: var(--fs-metric);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
+  white-space: nowrap;
+}
+.metric-value small {
+  margin-left: 3px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-3);
+}
+.metric-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Rolling digits for metric numbers. */
+.roll {
+  display: inline-flex;
+}
+.roll-digit {
+  position: relative;
+  display: inline-block;
+  height: 1.1em;
+  overflow: hidden;
+}
+.roll-strip {
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--t-slow) var(--ease);
+}
+.roll-strip span {
+  height: 1.1em;
+  line-height: 1.1em;
+}
+
+/* ---------- Data table ---------- */
+.dt {
+  width: 100%;
+  border-top: 1px solid var(--line);
+}
+.dt-row {
+  display: grid;
+  grid-template-columns: var(--cols);
+  align-items: center;
+  gap: 0 16px;
+  min-height: var(--row-h);
+  padding: 0 8px 0 10px;
+  border-bottom: 1px solid var(--line-soft);
+  position: relative;
+  transition: background-color var(--t-fast) var(--ease);
+}
+.dt-row:last-child {
+  border-bottom-color: var(--line);
+}
+.dt-body .dt-row:hover {
+  background: var(--hover);
+}
+.dt-head {
+  min-height: 34px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+.dt-head .r,
+.dt .r {
+  text-align: right;
+  justify-self: end;
+}
+.dt-row.is-current::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.dt-cell {
+  min-width: 0;
+}
+.dt-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-1);
+}
+.dt-name-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+.dt-name-btn:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--line-hover);
+}
+.dt-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-3);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dt-text {
+  font-size: 13px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dt-num {
+  font-size: 13px;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dt-num.dim {
+  color: var(--text-3);
+}
+.dt-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.dt-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+/* Inline meter: number and reset time above a thin bar. */
+.meter-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.meter-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.meter-pct {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+.meter-pct.warn {
+  color: var(--warn-text);
+}
+.meter-pct.bad {
+  color: var(--bad-text);
+}
+.meter-pct.na {
+  color: var(--text-4);
+}
+.meter-reset {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.meter {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--track);
+  overflow: hidden;
+}
+.meter-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  background: var(--meter);
+  transition:
+    width var(--t-slow) var(--ease),
+    background-color var(--t) var(--ease);
+}
+.meter-fill.warn {
+  background: var(--warn);
+}
+.meter-fill.bad {
+  background: var(--bad);
+}
+/* The live estimate above the last record: same color, lighter. */
+.meter-est {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--meter);
+  opacity: 0.35;
+}
+.meter-est.warn {
+  background: var(--warn);
+}
+.meter-est.bad {
+  background: var(--bad);
+}
+.approx {
+  color: var(--text-3);
+  font-weight: 400;
+  margin-right: 1px;
+}
+.linkish {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.linkish:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.linkish svg {
+  transition: transform var(--t-fast) var(--ease);
+}
+.linkish:hover svg {
+  transform: translateX(2px);
+}
+
+/* ---------- Chart ---------- */
+.chart {
+  position: relative;
+  user-select: none;
+}
+.chart svg {
+  display: block;
+  overflow: visible;
+}
+.chart-grid {
+  stroke: var(--chart-grid);
+}
+.chart-base {
+  stroke: var(--line);
+}
+.chart-axis {
+  fill: var(--text-3);
+  font-size: 11px;
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+}
+.chart-col {
+  fill: transparent;
+  transition: fill var(--t-fast) var(--ease);
+}
+.chart-col.on {
+  fill: var(--hover);
+}
+.chart-bar {
+  transition: opacity var(--t-fast) var(--ease);
+}
+.chart.dim .chart-bar:not(.on) {
+  opacity: 0.45;
+}
+.legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.legend-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: none;
+}
+.chart-tip {
+  position: absolute;
+  z-index: 10;
+  min-width: 180px;
+  padding: 8px 10px;
+  border: 1px solid var(--pop-line);
+  border-radius: 8px;
+  background: var(--pop);
+  box-shadow: var(--shadow-tip);
+  font-size: 12px;
+  pointer-events: none;
+  animation: fade-in var(--t-fast) var(--ease) both;
+}
+.chart-tip-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  color: var(--text-3);
+}
+.chart-tip-head b {
+  color: var(--text-1);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.chart-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 0;
+  color: var(--text-2);
+}
+.chart-tip-row span:last-child {
+  margin-left: auto;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Conversation list ---------- */
+.list-rows {
+  border-top: 1px solid var(--line);
+}
+.list-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 8px 6px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  transition: background-color var(--t-fast) var(--ease);
+}
+.list-row:last-child {
+  border-bottom-color: var(--line);
+}
+.list-row:hover {
+  background: var(--hover);
+}
+.list-row > svg {
+  color: var(--text-3);
+}
+.list-title {
+  font-size: 13.5px;
+  color: var(--text-1);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.list-meta {
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.list-meta .sep {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--text-4);
+  flex: none;
+}
+
+/* ---------- Ledger ---------- */
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.filters .select {
+  height: var(--ctl-h);
+  min-width: 150px;
+}
+.filter-label {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.cols-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 32px;
+}
+.share {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.share .meter {
+  width: 56px;
+  height: 4px;
+}
+.org-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+.inline-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.inline-edit .input {
+  height: 26px;
+  width: 140px;
+  font-size: 13px;
+}
+
+/* Heatmap: weekday rows, hour columns, gray steps. */
+.heat {
+  display: grid;
+  grid-template-columns: 28px repeat(24, minmax(0, 1fr));
+  gap: 3px;
+  max-width: 760px;
+}
+.heat-h,
+.heat-d {
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.heat-h {
+  text-align: left;
+  height: 16px;
+}
+.heat-d {
+  display: flex;
+  align-items: center;
+}
+.heat-c {
+  height: 18px;
+  border-radius: 3px;
+  background: var(--text-1);
+}
+.heat-c.l0 {
+  background: var(--track);
+}
+.heat-c.l1 {
+  opacity: 0.14;
+}
+.heat-c.l2 {
+  opacity: 0.3;
+}
+.heat-c.l3 {
+  opacity: 0.5;
+}
+.heat-c.l4 {
+  opacity: 0.75;
+}
+.heat-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.heat-legend .heat-c {
+  width: 14px;
+  height: 12px;
+}
+
+/* ---------- Switch dialog ---------- */
+.route-from {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.route-from b {
+  color: var(--text-1);
+  font-weight: 600;
+}
+.picks {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.pick {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--pop);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--t-fast) var(--ease);
+}
+.pick:last-child {
+  border-bottom: 0;
+}
+.pick:hover {
+  background: var(--hover);
+}
+.pick.on {
+  background: var(--accent-soft);
+}
+.pick:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.pick-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-1);
+}
+.pick-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.pick-meters {
+  display: grid;
+  grid-template-columns: repeat(2, 84px);
+  gap: 12px;
+}
+.where {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.where-opt {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--pop);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--t-fast) var(--ease),
+    background-color var(--t-fast) var(--ease);
+}
+.where-opt:hover {
+  border-color: var(--line-hover);
+}
+.where-opt.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.where-opt .radio {
+  margin-top: 1px;
+}
+.where-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.where-body {
+  grid-column: 2;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-3);
+}
+.prompt-preview {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--r-ctl);
+  background: var(--hover);
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.steps li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: baseline;
+  padding: 6px 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-1);
+}
+.step-n {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.waiting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 13px;
+}
+
+/* ---------- Settings: accent swatches ---------- */
+.swatch-row {
+  display: flex;
+  gap: 10px;
+}
+.swatch-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--ctl-h);
+  padding: 0 12px 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  font-size: 12.5px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition:
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.swatch-btn:hover {
+  border-color: var(--line-hover);
+  color: var(--text-1);
+}
+.swatch-btn.on {
+  border-color: var(--text-1);
+  color: var(--text-1);
+  box-shadow: 0 0 0 1px var(--text-1);
+}
+.swatch-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}

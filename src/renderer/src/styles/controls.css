@@ -1,93 +1,112 @@
-/* Buttons, tags, status marks, form controls, menu, toast. */
+/* Controls: buttons, tags, inputs, segmented, toggle, checkbox, radio, menu, tooltip, dialog, toast.
+   Radius 6 px (overlays 10 px), faint 1 px borders, four states each: hover, pressed, focus, disabled. */
 
 /* ---------- Buttons ---------- */
 .btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 16px;
-  border: 1px solid var(--ink);
-  border-radius: var(--radius-ctl);
-  background: transparent;
-  color: var(--ink);
+  gap: 7px;
+  height: var(--ctl-h);
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  color: var(--text-1);
   font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-weight: 500;
+  line-height: 1;
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
+  box-shadow: 0 1px 1px rgba(16, 16, 20, 0.03);
   transition:
-    background-color var(--dur-2) var(--ease),
-    color var(--dur-2) var(--ease),
-    border-color var(--dur-2) var(--ease),
-    transform var(--dur-1) var(--ease);
+    background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+.btn svg {
+  flex: none;
+  color: var(--text-2);
 }
 .btn:hover {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--hover);
+  border-color: var(--line-hover);
 }
 .btn:active {
-  transform: translateY(1px);
+  background: var(--active);
+  transform: translateY(0.5px);
 }
-.btn:disabled {
-  opacity: 0.4;
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.5;
   cursor: not-allowed;
   transform: none;
 }
 .btn:disabled:hover {
-  background: transparent;
-  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line-strong);
 }
-.btn svg {
-  flex: none;
-}
+/* Primary: solid ink. */
 .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-on);
-}
-.btn-primary:hover {
   background: var(--ink);
   border-color: var(--ink);
-  color: var(--paper);
+  color: var(--on-ink);
+  box-shadow: 0 1px 2px rgba(16, 16, 20, 0.12);
+}
+.btn-primary svg {
+  color: currentColor;
+  opacity: 0.85;
+}
+.btn-primary:hover {
+  background: var(--ink-hover);
+  border-color: var(--ink-hover);
+}
+.btn-primary:active {
+  background: var(--ink-active);
+  border-color: var(--ink-active);
 }
 .btn-primary:disabled:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-on);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-2);
+}
+.btn-ghost:hover {
+  background: var(--hover);
+  border-color: transparent;
+  color: var(--text-1);
+}
+.btn-ghost:disabled:hover {
+  background: transparent;
+  border-color: transparent;
 }
 .btn-sm {
-  height: 30px;
-  padding: 0 12px;
+  height: var(--ctl-h-sm);
+  padding: 0 10px;
   font-size: 12.5px;
+  gap: 6px;
 }
 .btn-lg {
-  height: 44px;
-  padding: 0 22px;
-  font-size: 14px;
+  height: 36px;
+  padding: 0 16px;
+  font-size: 13.5px;
 }
 .btn-block {
   width: 100%;
 }
-.btn-ghost {
-  border-color: transparent;
-}
-.btn-ghost:hover {
-  background: var(--paper-2);
-  color: var(--ink);
-}
-.btn-soft {
-  border-color: var(--rule-2);
-}
 .btn-danger {
   color: var(--bad-text);
 }
-.btn-danger:hover {
-  background: var(--bad);
-  border-color: var(--bad);
-  color: #fff;
+.btn-danger svg {
+  color: currentColor;
 }
 .btn-danger-solid,
 .btn-danger-solid:hover {
@@ -95,208 +114,211 @@
   border-color: var(--bad);
   color: #fff;
 }
+.btn-soft {
+  border-color: var(--line);
+}
 
 .icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: var(--ctl-h-sm);
+  height: var(--ctl-h-sm);
   flex: none;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: var(--radius-ctl);
+  border-radius: var(--r-ctl);
   background: transparent;
-  color: var(--ink-2);
+  color: var(--text-3);
   cursor: pointer;
   transition:
-    background-color var(--dur-2) var(--ease),
-    color var(--dur-2) var(--ease),
-    border-color var(--dur-2) var(--ease);
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
 }
 .icon-btn:hover {
-  background: var(--paper-2);
-  color: var(--ink);
+  background: var(--hover);
+  color: var(--text-1);
+}
+.icon-btn:active {
+  background: var(--active);
+}
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .icon-btn.bordered {
-  width: 36px;
-  height: 36px;
-  border-color: var(--rule-2);
+  width: var(--ctl-h);
+  height: var(--ctl-h);
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--text-2);
 }
 .icon-btn.bordered:hover {
-  border-color: var(--ink);
-  background: transparent;
+  border-color: var(--line-hover);
+  background: var(--hover);
 }
 .spin-once svg {
-  animation: spin 0.5s var(--ease);
+  animation: spin 0.6s var(--ease);
 }
 
-/* ---------- Tags (plan, flags) ---------- */
+/* ---------- Tags ---------- */
+.tag,
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   height: 20px;
   padding: 0 6px;
-  border: 1px solid var(--rule-2);
-  border-radius: var(--radius-ctl);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-tag);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1;
   white-space: nowrap;
   flex: none;
 }
-.badge-plan {
-  border-color: var(--ink);
-  color: var(--ink);
+.tag-accent,
+.badge-accent {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
-.badge-plan.unknown {
-  border-color: var(--rule-2);
-  color: var(--ink-3);
-}
-.badge-accent,
-.badge-desktop {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-on);
-}
-.badge-star {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: var(--paper);
-}
+.badge-desktop,
+.badge-star,
+.badge-plan,
 .badge-outline {
+  border-color: var(--line);
   background: transparent;
+  color: var(--text-2);
 }
 
-/* Status: a mark and a word. */
+/* Status text: plain when fine, colored with a dot when it needs attention. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.status.warn {
+  color: var(--warn-text);
+}
+.status.bad {
+  color: var(--bad-text);
+}
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-3);
   white-space: nowrap;
-  color: var(--ink-2);
 }
 .chip .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--radius-thumb);
-  background: var(--ink-4);
-}
-.chip-ok .dot {
-  background: var(--ok);
+  display: none;
 }
 .chip-warn {
   color: var(--warn-text);
 }
-.chip-warn .dot {
-  background: var(--warn);
-}
 .chip-bad {
   color: var(--bad-text);
 }
+.chip-warn .dot,
 .chip-bad .dot {
-  background: var(--bad);
+  display: inline-block;
 }
 
-/* Monogram for an account: initial in a square, the account's own color as a corner tick. */
+/* Monogram: an initial on neutral gray. */
 .avatar {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
-  border: 1px solid var(--ink);
-  border-radius: var(--radius-ctl);
-  background: var(--paper);
-  color: var(--ink);
-  font-weight: 500;
+  border-radius: 50%;
+  background: var(--active);
+  color: var(--text-2);
+  font-weight: 600;
   line-height: 1;
   user-select: none;
 }
-.avatar::after {
-  content: '';
-  position: absolute;
-  right: -1px;
-  top: -1px;
-  width: 30%;
-  height: 30%;
-  max-width: 10px;
-  max-height: 10px;
-  background: var(--tone, var(--ink));
-}
 .avatar-live {
   position: absolute;
-  left: -4px;
-  bottom: -4px;
-  width: 9px;
-  height: 9px;
-  border-radius: var(--radius-thumb);
-  background: var(--ok);
-  box-shadow: 0 0 0 2px var(--paper);
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface);
 }
 
-/* ---------- Form controls ---------- */
+/* ---------- Inputs ---------- */
 .input,
 .select,
 .textarea {
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--rule-2);
-  border-radius: var(--radius-ctl);
-  background: var(--surface-raised);
-  color: var(--ink);
+  height: var(--ctl-h);
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  color: var(--text-1);
   font-size: 13px;
   outline: none;
+  box-shadow: 0 1px 1px rgba(16, 16, 20, 0.03);
   transition:
-    border-color var(--dur-2) var(--ease),
-    box-shadow var(--dur-2) var(--ease);
+    border-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
 }
 .textarea {
   height: auto;
-  min-height: 72px;
-  padding: 9px 12px;
+  min-height: 76px;
+  padding: 8px 10px;
   line-height: 1.55;
   resize: vertical;
 }
 .input::placeholder,
 .textarea::placeholder {
-  color: var(--ink-4);
+  color: var(--text-4);
 }
 .input:hover,
 .select:hover,
 .textarea:hover {
-  border-color: var(--ink-3);
+  border-color: var(--line-hover);
 }
 .input:focus,
 .select:focus,
-.textarea:focus {
-  border-color: var(--ink);
-  box-shadow: 0 0 0 3px var(--focus-ring);
+.textarea:focus,
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+.input:disabled,
+.select:disabled,
+.textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .select {
   appearance: none;
-  padding-right: 32px;
-  background-image: linear-gradient(45deg, transparent 50%, var(--ink-2) 50%), linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
-  background-position:
-    calc(100% - 17px) 50%,
-    calc(100% - 12px) 50%;
-  background-size: 5px 5px;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 15 5 5 5-5'/%3E%3Cpath d='m7 9 5-5 5 5'/%3E%3C/svg%3E");
+  background-position: right 8px center;
+  background-size: 14px 14px;
   background-repeat: no-repeat;
   cursor: pointer;
   min-width: 0;
   max-width: 100%;
 }
 .select option {
-  background: var(--surface-raised);
-  color: var(--ink);
+  background: var(--pop);
+  color: var(--text-1);
 }
 .input-num {
   width: 84px;
@@ -304,154 +326,169 @@
 }
 .unit {
   margin-left: 6px;
-  color: var(--ink-3);
+  color: var(--text-3);
   font-size: 12.5px;
 }
-
 .field {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
   min-width: 0;
 }
 .field-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-2);
 }
 .field-label .opt {
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--ink-3);
+  color: var(--text-3);
   font-weight: 400;
 }
 .field-hint {
   font-size: 12px;
-  color: var(--ink-3);
+  color: var(--text-3);
 }
 
-/* Segmented control: options on one rule, the active one filled. */
+/* ---------- Segmented ---------- */
 .segmented {
   position: relative;
   display: inline-flex;
-  padding: 0;
-  border: 1px solid var(--ink);
-  border-radius: var(--radius-ctl);
-  background: transparent;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--active);
   isolation: isolate;
 }
 .segmented-pill {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: 2px;
+  bottom: 2px;
   left: 0;
   z-index: -1;
-  background: var(--ink);
-  border-radius: calc(var(--radius-ctl) - 1px);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(16, 16, 20, 0.08), 0 0 0 1px rgba(16, 16, 20, 0.04);
   transition:
-    transform var(--dur-3) var(--ease),
-    width var(--dur-3) var(--ease);
+    transform var(--t) var(--ease),
+    width var(--t) var(--ease);
+}
+html[data-theme='dark'] .segmented {
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+html[data-theme='dark'] .segmented-pill {
+  background: var(--active);
+  box-shadow: 0 0 0 1px var(--line-strong);
 }
 .segmented button {
-  height: 32px;
-  padding: 0 14px;
+  height: calc(var(--ctl-h) - 4px);
+  padding: 0 12px;
   border: 0;
+  border-radius: var(--r-ctl);
   background: none;
-  color: var(--ink-2);
+  color: var(--text-3);
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: color var(--dur-2) var(--ease);
-}
-.segmented button + button {
-  border-left: 1px solid var(--rule-2);
+  transition: color var(--t-fast) var(--ease);
 }
 .segmented button:hover {
-  color: var(--ink);
-}
-.segmented button.on,
-.segmented button.on + button {
-  border-left-color: transparent;
+  color: var(--text-1);
 }
 .segmented button.on {
-  color: var(--paper);
+  color: var(--text-1);
+}
+.segmented button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.segmented.sm button {
+  height: calc(var(--ctl-h-sm) - 4px);
+  padding: 0 10px;
+  font-size: 12px;
 }
 
-/* Toggle: a rectangle with a sliding block. */
+/* ---------- Toggle ---------- */
 .toggle {
   position: relative;
-  width: 40px;
-  height: 22px;
+  width: 34px;
+  height: 20px;
   flex: none;
   padding: 0;
-  border: 1px solid var(--ink);
-  border-radius: var(--radius-pill);
-  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  background: var(--line-strong);
   cursor: pointer;
-  transition:
-    background-color var(--dur-2) var(--ease),
-    border-color var(--dur-2) var(--ease);
+  transition: background-color var(--t) var(--ease);
 }
 .toggle::after {
   content: '';
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 14px;
-  height: 14px;
-  border-radius: var(--radius-thumb);
-  background: var(--ink);
-  transition:
-    transform var(--dur-3) var(--ease),
-    background-color var(--dur-2) var(--ease);
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 16, 20, 0.2);
+  transition: transform var(--t) var(--ease);
+}
+.toggle:hover {
+  background: var(--line-hover);
 }
 .toggle.on {
   background: var(--accent);
-  border-color: var(--accent);
+}
+.toggle.on:hover {
+  background: var(--accent-hover);
 }
 .toggle.on::after {
-  transform: translateX(18px);
-  background: var(--accent-on);
+  transform: translateX(14px);
+}
+.toggle:active::after {
+  width: 18px;
+}
+.toggle.on:active::after {
+  transform: translateX(12px);
 }
 .toggle:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
-/* Checkbox */
+/* ---------- Checkbox, radio ---------- */
 .check {
   display: flex;
   align-items: flex-start;
   gap: 10px;
   cursor: pointer;
   font-size: 13px;
+  color: var(--text-1);
 }
 .check input {
   appearance: none;
   width: 16px;
   height: 16px;
-  margin: 2px 0 0;
+  margin: 1px 0 0;
   flex: none;
-  border: 1px solid var(--ink);
-  border-radius: var(--radius-ctl);
-  background: var(--surface-raised);
-  cursor: pointer;
   display: grid;
   place-content: center;
-  transition: background-color var(--dur-2) var(--ease);
+  border: 1px solid var(--line-hover);
+  border-radius: 4px;
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
 }
 .check input::after {
   content: '';
   width: 8px;
   height: 4px;
-  border-left: 1.6px solid var(--accent-on);
-  border-bottom: 1.6px solid var(--accent-on);
+  border-left: 1.5px solid var(--on-accent);
+  border-bottom: 1.5px solid var(--on-accent);
   transform: rotate(-45deg) translate(1px, -1px) scale(0);
-  transition: transform var(--dur-2) var(--ease);
+  transition: transform var(--t-fast) var(--ease);
 }
 .check input:checked {
   background: var(--accent);
@@ -461,7 +498,7 @@
   transform: rotate(-45deg) translate(1px, -1px) scale(1);
 }
 .check input:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 .check-text {
@@ -471,16 +508,44 @@
 }
 .check-hint {
   font-size: 12px;
-  color: var(--ink-3);
+  color: var(--text-3);
+}
+.radio {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border: 1px solid var(--line-hover);
+  border-radius: 50%;
+  background: var(--surface);
+  transition: border-color var(--t-fast) var(--ease);
+}
+.radio::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(--on-accent);
+  transform: scale(0);
+  transition: transform var(--t-fast) var(--ease);
+}
+.on > .radio,
+[aria-checked='true'] > .radio {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.on > .radio::after,
+[aria-checked='true'] > .radio::after {
+  transform: scale(1);
 }
 
 /* ---------- Empty ---------- */
 .empty {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  padding: 36px 0;
-  border-top: 1px solid var(--rule);
+  align-items: center;
+  text-align: center;
+  padding: 48px 0;
 }
 .empty-icon {
   width: 40px;
@@ -488,23 +553,23 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--ink);
-  border-radius: var(--radius-ctl);
-  color: var(--ink);
+  border-radius: 10px;
+  background: var(--hover);
+  color: var(--text-3);
   margin-bottom: 14px;
 }
 .empty-title {
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
 }
 .empty-hint {
   margin-top: 4px;
-  color: var(--ink-3);
+  max-width: 360px;
   font-size: 13px;
+  color: var(--text-3);
 }
 
-/* ---------- Menu ---------- */
+/* ---------- Menu (popover) ---------- */
 .menu-anchor {
   position: relative;
 }
@@ -513,13 +578,13 @@
   right: 0;
   top: calc(100% + 6px);
   z-index: 30;
-  min-width: 188px;
-  padding: 6px;
-  background: var(--surface-raised);
-  border: 1px solid var(--ink);
-  border-radius: var(--radius-ctl);
+  min-width: 200px;
+  padding: 4px;
+  background: var(--pop);
+  border: 1px solid var(--pop-line);
+  border-radius: var(--r-pop);
   box-shadow: var(--shadow-pop);
-  animation: menu-in var(--dur-2) var(--ease-out) both;
+  animation: pop-in var(--t) var(--ease) both;
   transform-origin: top right;
 }
 .menu.up {
@@ -527,118 +592,271 @@
   bottom: calc(100% + 6px);
   transform-origin: bottom right;
 }
-@keyframes menu-in {
+.menu.left {
+  right: auto;
+  left: 0;
+  transform-origin: top left;
+}
+@keyframes pop-in {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-3px) scale(0.985);
   }
 }
 .menu-label {
-  padding: 6px 10px 4px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-3);
+  padding: 6px 8px 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-3);
 }
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   width: 100%;
-  height: 34px;
-  padding: 0 10px;
+  min-height: 32px;
+  padding: 6px 8px;
   border: 0;
-  border-radius: var(--radius-ctl);
+  border-radius: var(--r-ctl);
   background: none;
-  color: var(--ink);
+  color: var(--text-1);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
 }
-.menu-item:hover {
-  background: var(--ink);
-  color: var(--paper);
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--hover);
+  box-shadow: none;
+}
+.menu-item svg {
+  flex: none;
+  color: var(--text-3);
 }
 .menu-item.danger {
   color: var(--bad-text);
 }
-.menu-item.danger:hover {
-  background: var(--bad);
-  color: #fff;
-}
-.menu-item svg {
-  flex: none;
-  opacity: 0.85;
+.menu-item.danger svg {
+  color: currentColor;
 }
 .menu-item:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
-}
-.menu-sep {
-  height: 1px;
-  margin: 5px 4px;
-  background: var(--rule);
 }
 .menu-item-sub {
   margin-left: auto;
-  font-size: 11px;
-  color: var(--ink-3);
+  padding-left: 8px;
+  font-size: 12px;
+  color: var(--text-3);
+  flex: none;
+}
+.menu-item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+.menu-item-detail {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.menu-sep {
+  height: 1px;
+  margin: 4px -4px;
+  background: var(--pop-line);
+}
+
+/* ---------- Tooltip: [data-tip] ---------- */
+.has-tip {
+  position: relative;
+}
+.has-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 40;
+  width: max-content;
+  max-width: 260px;
+  padding: 7px 10px;
+  white-space: pre-line;
+  background: var(--pop);
+  color: var(--text-1);
+  border: 1px solid var(--pop-line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-tip);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: left;
+  opacity: 0;
+  transform: translate(-50%, 3px);
+  pointer-events: none;
+  transition:
+    opacity var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+.has-tip:hover::after,
+.has-tip:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  transition-delay: 250ms;
+}
+.has-tip.tip-start::after {
+  left: 0;
+  transform: translate(0, 3px);
+}
+.has-tip.tip-start:hover::after {
+  transform: none;
+}
+.has-tip.tip-end::after {
+  left: auto;
+  right: 0;
+  transform: translate(0, 3px);
+}
+.has-tip.tip-end:hover::after {
+  transform: none;
+}
+
+/* ---------- Dialog ---------- */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px 24px;
+  background: var(--backdrop);
+  animation: fade-in var(--t) var(--ease) both;
+}
+.backdrop.closing {
+  animation: fade-out var(--t-fast) var(--ease) both;
+}
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(520px, 100%);
+  max-height: min(700px, 100%);
+  background: var(--pop);
+  border: 1px solid var(--pop-line);
+  border-radius: var(--r-pop);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+  animation: dialog-in var(--t-slow) var(--ease) both;
+}
+.backdrop.closing .dialog {
+  animation: dialog-out var(--t-fast) var(--ease) both;
+}
+.dialog.wide {
+  width: min(640px, 100%);
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.99);
+  }
+}
+.dialog-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px 0;
+}
+.dialog-head-icon {
+  display: none;
+}
+.dialog-kicker {
+  display: none;
+}
+.dialog-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+}
+.dialog-sub {
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px 20px 20px;
+  overflow: auto;
+}
+.dialog-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+html[data-theme='dark'] .dialog-foot {
+  background: var(--pop);
+}
+.dialog-foot .left {
+  margin-right: auto;
+}
+.swap-in {
+  animation: rise var(--t-slow) var(--ease) both;
 }
 
 /* ---------- Toast ---------- */
 .toasts {
   position: fixed;
-  left: 50%;
-  bottom: 22px;
-  transform: translateX(-50%);
+  right: 20px;
+  bottom: 20px;
   z-index: 80;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
   pointer-events: none;
 }
 .toast {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px 10px 12px;
-  border-radius: var(--radius-ctl);
-  background: var(--ink);
-  color: var(--paper);
+  gap: 9px;
+  max-width: 380px;
+  padding: 10px 14px 10px 12px;
+  border: 1px solid var(--pop-line);
+  border-radius: var(--r-pop);
+  background: var(--pop);
+  color: var(--text-1);
   font-size: 13px;
-  font-weight: 500;
   box-shadow: var(--shadow-pop);
-  animation: toast-in var(--dur-3) var(--ease-out) both;
+  animation: toast-in var(--t-slow) var(--ease) both;
 }
 .toast.leaving {
-  animation: toast-out var(--dur-2) var(--ease) both;
+  animation: toast-out var(--t-fast) var(--ease) both;
 }
 .toast-icon {
-  width: 18px;
-  height: 18px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-thumb);
-  color: #fff;
   flex: none;
+  color: var(--text-3);
 }
 .toast.ok .toast-icon {
-  background: var(--ok);
+  color: var(--ok-text);
 }
 .toast.bad .toast-icon {
-  background: var(--bad);
-}
-.toast.info .toast-icon {
-  background: var(--accent);
-  color: var(--accent-on);
+  color: var(--bad-text);
 }
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
 }
 @keyframes toast-out {
@@ -648,160 +866,31 @@
   }
 }
 
-/* ---------- Editorial ---------- */
-html[data-style='editorial'] .btn {
-  font-family: var(--font-sans);
-  letter-spacing: 0.04em;
+/* ---------- Notice line (inside dialogs and pages) ---------- */
+.success-line,
+.error-line,
+.note-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.55;
 }
-html[data-style='editorial'] .btn-primary {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
+.success-line svg,
+.error-line svg,
+.note-line svg {
+  flex: none;
+  margin-top: 2px;
 }
-html[data-style='editorial'] .btn-primary:hover {
-  background: transparent;
-  color: var(--ink);
+.success-line {
+  color: var(--text-1);
 }
-html[data-style='editorial'] .badge {
-  font-family: var(--font-serif);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  text-transform: none;
+.success-line svg {
+  color: var(--ok-text);
 }
-/* Italics only where the text is Latin: Chinese has no italic and a slanted Song face reads as an error. */
-html[data-style='editorial'] .badge-plan {
-  font-style: italic;
+.error-line {
+  color: var(--bad-text);
 }
-html[data-style='editorial'] .avatar {
-  border-radius: 50%;
-  font-family: var(--font-serif);
-}
-html[data-style='editorial'] .avatar::after {
-  display: none;
-}
-
-/* ---------- Eclipse ---------- */
-html[data-style='eclipse'] .btn {
-  border-color: var(--rule-2);
-  background: var(--surface);
-  font-weight: 550;
-  box-shadow: var(--shadow-card);
-}
-html[data-style='eclipse'] .btn:hover {
-  background: var(--paper-3);
-  border-color: var(--rule-2);
-  color: var(--ink);
-}
-html[data-style='eclipse'] .btn:disabled:hover {
-  background: var(--surface);
-}
-html[data-style='eclipse'] .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-on);
-}
-html[data-style='eclipse'] .btn-primary:hover {
-  background: color-mix(in srgb, var(--accent) 86%, var(--paper));
-  border-color: transparent;
-  color: var(--accent-on);
-}
-html[data-style='eclipse'] .btn-ghost {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-}
-html[data-style='eclipse'] .icon-btn.bordered {
-  border-color: var(--rule-2);
-  background: var(--surface);
-}
-html[data-style='eclipse'] .badge {
-  border-color: var(--rule-2);
-  border-radius: 6px;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  text-transform: none;
-}
-html[data-style='eclipse'] .badge-plan {
-  border-color: var(--rule-2);
-  color: var(--ink);
-}
-html[data-style='eclipse'] .badge-desktop,
-html[data-style='eclipse'] .badge-accent {
-  border-color: transparent;
-  background: var(--accent-wash);
-  color: var(--accent-text);
-}
-html[data-style='eclipse'] .badge-star {
-  border-color: transparent;
-  background: color-mix(in srgb, var(--ink) 10%, transparent);
-  color: var(--ink);
-}
-html[data-style='eclipse'] .chip {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  letter-spacing: 0;
-}
-html[data-style='eclipse'] .avatar {
-  border: 0;
-  border-radius: 12px;
-  background: var(--paper-3);
-  box-shadow: inset 0 0 0 1px var(--rule-2);
-}
-html[data-style='eclipse'] .avatar::after {
-  right: auto;
-  left: 50%;
-  top: auto;
-  bottom: 0;
-  width: 40%;
-  height: 2px;
-  transform: translateX(-50%);
-  border-radius: 2px;
-}
-html[data-style='eclipse'] .segmented {
-  border-color: var(--rule-2);
-  background: var(--paper-2);
-  padding: 2px;
-}
-html[data-style='eclipse'] .segmented-pill {
-  top: 2px;
-  bottom: 2px;
-  background: var(--surface);
-  box-shadow: var(--shadow-card), inset 0 0 0 1px var(--rule-2);
-  border-radius: 7px;
-}
-html[data-style='eclipse'] .segmented button {
-  height: 28px;
-  border-left: 0 !important;
-}
-html[data-style='eclipse'] .segmented button.on {
-  color: var(--ink);
-}
-html[data-style='eclipse'] .toggle {
-  border-color: var(--rule-2);
-  background: var(--paper-3);
-}
-html[data-style='eclipse'] .toggle::after {
-  background: var(--ink-3);
-}
-html[data-style='eclipse'] .toggle.on {
-  background: var(--fill-solid);
-  border-color: var(--fill-solid);
-}
-html[data-style='eclipse'] .toggle.on::after {
-  background: #fff;
-}
-html[data-style='eclipse'] .menu {
-  border-color: var(--rule-2);
-  border-radius: 12px;
-}
-html[data-style='eclipse'] .menu-item:hover {
-  background: var(--paper-3);
-  color: var(--ink);
-}
-html[data-style='eclipse'] .toast {
-  background: var(--surface-raised);
-  color: var(--ink);
-  border: 1px solid var(--rule-2);
+.note-line {
+  color: var(--text-3);
 }

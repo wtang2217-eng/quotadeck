@@ -109,12 +109,12 @@ describe('macOS menu', () => {
 
 describe('window chrome', () => {
   it('hides the title bar on macOS and Windows, keeps the frame on Linux', () => {
-    expect(titleBarOptions('darwin', 'swiss', false)).toMatchObject({ titleBarStyle: 'hiddenInset' })
-    const win = titleBarOptions('win32', 'swiss', true)
+    expect(titleBarOptions('darwin', false)).toMatchObject({ titleBarStyle: 'hiddenInset' })
+    const win = titleBarOptions('win32', true)
     expect(win.titleBarStyle).toBe('hidden')
     expect(win.titleBarOverlay).toMatchObject({ color: '#00000000', height: 40 })
-    expect((win.titleBarOverlay as { symbolColor: string }).symbolColor).not.toBe((titleBarOptions('win32', 'swiss', false).titleBarOverlay as { symbolColor: string }).symbolColor)
-    expect(titleBarOptions('linux', 'swiss', false)).toEqual({})
+    expect((win.titleBarOverlay as { symbolColor: string }).symbolColor).not.toBe((titleBarOptions('win32', false).titleBarOverlay as { symbolColor: string }).symbolColor)
+    expect(titleBarOptions('linux', false)).toEqual({})
   })
 })
 

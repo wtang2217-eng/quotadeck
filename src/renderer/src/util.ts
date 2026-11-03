@@ -1,6 +1,6 @@
 import { flushSync } from 'react-dom'
 import { accountName, formatClock, formatIn } from '@shared/format'
-import type { AccountStatus, AccountView, ActivityType, Language, LimitKind, PlanInfo, UsageSnapshot, UsageWindow } from '@shared/types'
+import type { AccountStatus, AccountView, ActivityType, Language, LimitKind, PlanInfo, TokenTotals, UsageSnapshot, UsageWindow } from '@shared/types'
 import type { T, TKey } from './i18n'
 
 export type Tone = 'ok' | 'warn' | 'bad' | 'muted' | 'info' | 'accent'
@@ -217,4 +217,24 @@ export function resolveTheme(theme: 'system' | 'light' | 'dark'): 'light' | 'dar
 export function errMessage(e: unknown): string {
   if (e instanceof Error) return e.message
   return String(e)
+}
+
+/** "$1,234.56"; under a dollar keeps cents, large amounts drop them. */
+export function formatUsd(n: number, opts?: { compact?: boolean }): string {
+  const abs = Math.abs(n)
+  if (opts?.compact && abs >= 10_000) return `$${(n / 1000).toFixed(abs >= 100_000 ? 0 : 1)}k`
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: abs >= 1000 ? 0 : 2, maximumFractionDigits: abs >= 1000 ? 0 : 2 })}`
+}
+
+/** Token counts in K / M / B. */
+export function formatTokens(n: number): string {
+  const abs = Math.abs(n)
+  if (abs >= 1e9) return `${(n / 1e9).toFixed(abs >= 1e10 ? 1 : 2)}B`
+  if (abs >= 1e6) return `${(n / 1e6).toFixed(abs >= 1e8 ? 0 : 1)}M`
+  if (abs >= 1e3) return `${(n / 1e3).toFixed(abs >= 1e5 ? 0 : 1)}K`
+  return String(Math.round(n))
+}
+
+export function sumTokens(t: TokenTotals | undefined): number {
+  return t ? t.input + t.output + t.cacheWrite5m + t.cacheWrite1h + t.cacheRead : 0
 }
