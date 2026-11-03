@@ -125,6 +125,36 @@ export function registerIpc(backend: Backend, getWindow: () => BrowserWindow | u
     // "" (unknown accounts) is a real filter; only a missing value means every account.
     accountId: typeof q?.accountId === 'string' ? q.accountId.slice(0, 100) : 'all'
   })
+  ipcMain.handle(IPC.exportSettings, async () => {
+    const win = getWindow()
+    const day = new Date().toISOString().slice(0, 10)
+    const options = { defaultPath: path.join(app.getPath('documents'), `QuotaDeck 设置备份 ${day}.json`), filters: [{ name: 'JSON', extensions: ['json'] }] }
+    const r = win && !win.isDestroyed() ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
+    if (r.canceled || !r.filePath) return { ok: false, cancelled: true }
+    try {
+      fs.writeFileSync(r.filePath, JSON.stringify(backend.settingsBackup(), null, 2) + '\n', 'utf8')
+      return { ok: true, path: r.filePath }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+  ipcMain.handle(IPC.importSettings, async () => {
+    const win = getWindow()
+    const options = { properties: ['openFile' as const], filters: [{ name: 'JSON', extensions: ['json'] }] }
+    const r = win && !win.isDestroyed() ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    if (r.canceled || !r.filePaths[0]) return { ok: false, cancelled: true }
+    let data: unknown
+    try {
+      const file = r.filePaths[0]
+      if (fs.statSync(file).size > 5 * 1024 * 1024) return { ok: false, error: 'file too large' }
+      data = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, ''))
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+    const result = await backend.importSettings(data)
+    if (result.ok) onSettingsChanged(backend.settings)
+    return result
+  })
   ipcMain.handle(IPC.setOrgLabel, (_e, orgUuid: unknown, label: unknown) => {
     const org = str(orgUuid, 100)
     if (org && /^[0-9a-f-]{36}$/i.test(org)) backend.setOrgLabel(org, str(label, 400) ?? '')

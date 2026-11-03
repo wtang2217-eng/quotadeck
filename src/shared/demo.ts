@@ -3,6 +3,7 @@
 
 import { defaultSettings } from './defaults'
 import { demoLedgerStats, type DemoAccountRef } from './demoStats'
+import { planMonthlyUsd } from './subscriptions'
 import type {
   AccountView,
   ActivityEvent,
@@ -204,7 +205,7 @@ export function setDemoOrgLabel(orgUuid: string, label: string): void {
 export function demoStats(lang: Language = 'zh-CN', range: StatsRange = '7d', accountId?: string, now = Date.now(), orgLabels: Record<string, string> = demoOrgLabels): UsageStats {
   const accounts = demoAccounts(lang, now)
   const shares = [0.55, 0.35, 0.1]
-  const refs: DemoAccountRef[] = accounts.map((a, i) => ({ id: a.id, label: a.nickname ?? a.email ?? a.id, email: a.email, share: shares[i] ?? 0.05 }))
+  const refs: DemoAccountRef[] = accounts.map((a, i) => ({ id: a.id, label: a.nickname ?? a.email ?? a.id, email: a.email, share: shares[i] ?? 0.05, planUsd: planMonthlyUsd(a.plan?.kind) }))
   refs.push({
     id: `org:${DEMO_OLD_ORG}`,
     kind: 'org',
@@ -357,6 +358,19 @@ export function demoState(lang: Language = 'zh-CN', now = Date.now()): AppState 
       at: now - 38 * MIN
     },
     needsSetup: false,
-    update: { current: DEMO_VERSION, latest: DEMO_VERSION, available: false, url: 'https://github.com/wtang2217-eng/quotadeck/releases/latest', checkedAt: now - 2 * HOUR }
+    update: { current: DEMO_VERSION, latest: DEMO_VERSION, available: false, url: 'https://github.com/wtang2217-eng/quotadeck/releases/latest', checkedAt: now - 2 * HOUR },
+    // A minor incident, so the status line has something to show.
+    serviceStatus: {
+      indicator: 'minor',
+      description: 'Partially Degraded Service',
+      components: [
+        { name: 'Claude Code', status: 'degraded_performance' },
+        { name: 'Claude API (api.anthropic.com)', status: 'operational' },
+        { name: 'claude.ai', status: 'operational' },
+        { name: 'Claude Console (platform.claude.com)', status: 'operational' }
+      ],
+      checkedAt: now - 2 * MIN,
+      url: 'https://status.claude.com'
+    }
   }
 }

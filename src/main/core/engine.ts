@@ -29,7 +29,10 @@ import type {
   Page,
   PendingSwitch,
   ProjectItem,
+  ImportResult,
+  ServiceStatus,
   Settings,
+  SettingsBackup,
   SetupCheckId,
   SetupOptions,
   SetupProgress,
@@ -63,6 +66,9 @@ import { renderStatusLine } from './statusline'
 import { loadState, saveStateNow, saveStateSoon, type PersistedState } from './store'
 import { compareVersions, fetchLatestRelease } from './updates'
 import { costOfTokens, PRICE_LIST_DATE } from './pricing'
+import { fetchServiceStatus } from './serviceStatus'
+import { dailyBackup, makeBackup, planImport } from './settingsBackup'
+import { writeJsonAtomic } from './jsonfile'
 
 const MIN = 60_000
 const HOUR = 60 * MIN
@@ -89,7 +95,11 @@ export interface EngineOptions {
   runCommand?: CommandRunner
   /** Looks up the latest release; replaced in tests. */
   fetchRelease?: typeof fetchLatestRelease
+  /** Reads status.claude.com; replaced in tests. */
+  fetchStatus?: typeof fetchServiceStatus
 }
+
+const STATUS_EVERY = 5 * MIN
 
 const PENDING_SWITCH_WAIT = 30 * MIN
 const PENDING_SWITCH_SHOW = 10 * MIN
@@ -162,6 +172,7 @@ export class Engine extends EventEmitter {
     const first = setTimeout(() => void this.checkForUpdates(false), 20_000)
     first.unref?.()
     this.timers.push(first)
+    if (this.settings.checkServiceStatus) void this.checkServiceStatus()
   }
 
   async stop(): Promise<void> {
@@ -228,7 +239,74 @@ export class Engine extends EventEmitter {
     if (Date.now() - (this.s.lastLoginCheckAt ?? 0) > DAY) void this.checkLogins(false)
     this.checkPendingSwitch()
     if (Date.now() - (this.s.update?.checkedAt ?? 0) > UPDATE_EVERY) void this.checkForUpdates(false)
+    if (this.settings.checkServiceStatus && Date.now() - (this.serviceStatus?.checkedAt ?? this.lastStatusTry) > STATUS_EVERY) void this.checkServiceStatus()
+    this.backupSettingsDaily()
     void this.refreshEstimates()
+  }
+
+  private serviceStatus?: ServiceStatus
+  private lastStatusTry = 0
+
+  /** Read status.claude.com; a change (an outage, or the recovery from one) is pushed. Failures stay quiet. */
+  async checkServiceStatus(): Promise<void> {
+    this.lastStatusTry = Date.now()
+    try {
+      const next = await (this.opts.fetchStatus ?? fetchServiceStatus)(this.opts.appVersion)
+      const prev = this.serviceStatus
+      this.serviceStatus = next
+      const same = prev && prev.indicator === next.indicator && prev.description === next.description && JSON.stringify(prev.components) === JSON.stringify(next.components)
+      if (!same) this.emitStateSoon()
+    } catch (e) {
+      console.warn('[quotadeck] service status check failed:', (e as Error).message)
+    }
+  }
+
+  /** One copy of the settings per day in ~/.quotadeck/backups (settings-YYYYMMDD.json, the newest ten kept). */
+  private backupSettingsDaily(): void {
+    const day = new Date().toDateString()
+    if (this.s.lastSettingsBackup === day) return
+    try {
+      dailyBackup(qdPaths().backups, this.settingsBackup())
+      this.s.lastSettingsBackup = day
+      saveStateSoon(this.s)
+    } catch (e) {
+      console.warn('[quotadeck] settings backup failed:', (e as Error).message)
+    }
+  }
+
+  settingsBackup(): SettingsBackup {
+    return makeBackup(this.settings, this.s.accounts, this.s.favorites, this.s.orgLabels)
+  }
+
+  /** Merge a settings file the user picked, after keeping a copy of the current settings. */
+  async importSettings(data: unknown): Promise<ImportResult> {
+    let plan
+    try {
+      plan = planImport(data, this.s.accounts, this.opts.locale)
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+    const backupPath = path.join(qdPaths().backups, `settings-before-import-${Date.now()}.json`)
+    try {
+      writeJsonAtomic(backupPath, this.settingsBackup())
+    } catch (e) {
+      return { ok: false, error: `backup failed: ${(e as Error).message}` }
+    }
+    await this.updateSettings(plan.settings)
+    for (const a of plan.accounts) this.updateAccount(a.id, { nickname: a.nickname, color: a.color })
+    const favorites = new Set([...this.s.favorites, ...plan.favorites])
+    const addedFavorites = favorites.size - this.s.favorites.length
+    this.s.favorites = [...favorites]
+    Object.assign(this.s.orgLabels, plan.orgLabels)
+    this.statsCache.clear()
+    saveStateNow(this.s)
+    this.emitState()
+    return {
+      ok: true,
+      applied: { settings: Object.keys(plan.settings).length, accounts: plan.accounts.length, favorites: addedFavorites, orgLabels: Object.keys(plan.orgLabels).length },
+      dropped: plan.dropped,
+      backupPath
+    }
   }
 
   /** Organization the desktop app was signed in with at a time (its last usage sample before then). */
@@ -1019,7 +1097,8 @@ export class Engine extends EventEmitter {
       lastInterrupted: this.s.lastInterrupted,
       needsSetup: !this.s.setupDismissedAt && (this.s.accounts.length === 0 || !probe.hooksInstalled),
       pendingSwitch: this.s.pendingSwitch,
-      update: this.s.update
+      update: this.s.update,
+      serviceStatus: this.settings.checkServiceStatus ? this.serviceStatus : undefined
     }
     return this.view
   }
@@ -1507,7 +1586,8 @@ export class Engine extends EventEmitter {
         }
       },
       partial: !this.scanner.complete,
-      note: this.t('stats.note', { date: PRICE_LIST_DATE })
+      note: this.t('stats.note', { date: PRICE_LIST_DATE }),
+      plans: this.s.accounts.map((a) => ({ id: a.id, plan: a.plan?.kind }))
     })
     saveHistoryCache()
     if (!value.partial) this.statsCache.set(key, { at: Date.now(), revision: this.ledger.revision, value })

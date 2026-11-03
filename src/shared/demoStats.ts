@@ -31,6 +31,8 @@ export interface DemoAccountRef {
   orgUuid?: string
   /** Only used between these many days ago (inclusive), e.g. an account that stopped being used. */
   activeAgo?: [number, number]
+  /** Monthly price of the account's plan, when it has a public one. */
+  planUsd?: number
 }
 
 const MODELS: Array<{ model: string; label: string; family: ModelFamily; share: number; price: ModelPrice }> = [
@@ -177,6 +179,32 @@ export function demoLedgerStats(
   totals.webSearches = Math.round(totals.requests / 900)
   // About an eighth of the dollars are Claude Code's background requests (compacting context, titles, web search).
   totals.background = { tokens: scale(totals.tokens, 0.11), costUsd: r2(totals.costUsd * 0.125), webSearches: totals.webSearches }
+  // What prompt caching did, per model at its own prices.
+  let cacheSavingsUsd = 0
+  let noCacheUsd = 0
+  for (const c of shown) {
+    const p = MODELS[c.model].price
+    const read = p.cacheRead ?? p.input * 0.1
+    const t = c.tokens
+    cacheSavingsUsd += (t.cacheRead * (p.input - read)) / 1e6
+    noCacheUsd += ((t.input + t.cacheRead + t.cacheWrite5m + t.cacheWrite1h) * p.input + t.output * p.output) / 1e6
+  }
+  const t = totals.tokens
+  const cacheHitRate = Math.round((t.cacheRead / Math.max(1, t.input + t.cacheRead + t.cacheWrite5m + t.cacheWrite1h)) * 10_000) / 10_000
+  // This month against the plans' monthly prices, for the accounts in view that have one.
+  const inView = accounts.filter((a) => all || a.id === accountId)
+  const counted = inView.filter((a) => a.planUsd !== undefined)
+  const planMonthlyUsd = counted.reduce((s, a) => s + a.planUsd!, 0)
+  const monthUsd = r2(mine.filter((c) => counted.some((a) => a.id === c.account) && dayName(todayStart - c.day * DAY).startsWith(month)).reduce((s, c) => s + c.costUsd, 0))
+  const subscription = {
+    monthUsd,
+    planMonthlyUsd,
+    ratio: planMonthlyUsd > 0 ? Math.round((monthUsd / planMonthlyUsd) * 100) / 100 : undefined,
+    accounts: counted.length,
+    excluded: inView.length - counted.length,
+    asOf: '2026-11-03',
+    source: 'https://claude.com/pricing'
+  }
   totals.conversations =Math.max(1, Math.round((range === 'today' ? 9 : 6.2 * Math.min(span, HISTORY_DAYS)) * (all ? 1 : (accounts.find((a) => a.id === accountId)?.share ?? 0) + 0.15)))
 
   const fixed = {
@@ -272,7 +300,8 @@ export function demoLedgerStats(
     to: now,
     timeZone: 'Asia/Shanghai',
     firstDay: dayName(todayStart - (HISTORY_DAYS - 1) * DAY),
-    totals,
+    totals: { ...totals, cacheHitRate, cacheSavingsUsd: r2(cacheSavingsUsd), noCacheUsd: r2(noCacheUsd) },
+    subscription,
     fixed,
     days,
     hours,

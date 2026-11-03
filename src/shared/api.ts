@@ -10,6 +10,7 @@ import type {
   DesktopSwitchOptions,
   DesktopSwitchResult,
   ExportResult,
+  ImportResult,
   IntegrationStatus,
   LoginProgress,
   MergeStatus,
@@ -81,6 +82,12 @@ export interface QuotaDeckApi {
   /** Name an organization row (an old account not in the panel); at most 40 characters, "" restores the default name. */
   setOrgLabel(orgUuid: string, label: string): Promise<AppState>
 
+  // Settings backup (no credentials, no ledger)
+  /** Ask where to save, then write settings, account nicknames and colors, favorites and organization names as JSON. */
+  exportSettings(): Promise<ExportResult>
+  /** Ask for a file, check it, keep a copy of the current settings, then merge what is recognized. */
+  importSettings(): Promise<ImportResult>
+
   // One-click setup
   getSetupStatus(): Promise<SetupStatus>
   /** Do every fixable step in order. Progress and the final status arrive via onSetupProgress. */
@@ -138,6 +145,8 @@ export const IPC = {
   getStats: 'qd:get-stats',
   exportLedgerCsv: 'qd:export-ledger-csv',
   setOrgLabel: 'qd:set-org-label',
+  exportSettings: 'qd:export-settings',
+  importSettings: 'qd:import-settings',
   getSetupStatus: 'qd:get-setup-status',
   runSetup: 'qd:run-setup',
   setupProgress: 'qd:setup-progress',

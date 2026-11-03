@@ -4,6 +4,8 @@
 import { EventEmitter } from 'node:events'
 import { demoConversations, demoProjects, demoSetupStatus, demoState, demoStats, setDemoOrgLabel } from '@shared/demo'
 import type {
+  ImportResult,
+  SettingsBackup,
   AppState,
   ConversationQuery,
   DesktopSwitchOptions,
@@ -152,6 +154,14 @@ export class DemoBackend extends EventEmitter implements Backend {
   setOrgLabel(orgUuid: string, label: string): void {
     setDemoOrgLabel(orgUuid, label)
     this.push()
+  }
+
+  settingsBackup(): SettingsBackup {
+    return { kind: 'quotadeck-settings', version: 1, exportedAt: Date.now(), settings: this.settings, accounts: this.state.accounts.map((a) => ({ id: a.id, email: a.email, nickname: a.nickname, color: a.color })), favorites: [...this.favorites], orgLabels: {} }
+  }
+
+  async importSettings(): Promise<ImportResult> {
+    return { ok: true, applied: { settings: 4, accounts: 2, favorites: 1, orgLabels: 1 }, dropped: ['settings.oldOption'], backupPath: 'C:\\Users\\alice\\.quotadeck\\backups\\settings-before-import.json' }
   }
 
   async ledgerCsv(query: StatsQuery) {

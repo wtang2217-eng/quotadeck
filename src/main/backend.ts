@@ -7,7 +7,9 @@ import type {
   ConversationQuery,
   DesktopSwitchOptions,
   DesktopSwitchResult,
+  ImportResult,
   IntegrationStatus,
+  SettingsBackup,
   MergeStatus,
   ProjectItem,
   Settings,
@@ -51,6 +53,10 @@ export interface Backend extends EventEmitter {
   ledgerCsv(query: StatsQuery): Promise<{ csv: string; fileName: string }>
   /** Name an organization row; "" restores the default name. Pushes a state update. */
   setOrgLabel(orgUuid: string, label: string): void
+  /** What a settings export holds. */
+  settingsBackup(): SettingsBackup
+  /** Merge a parsed settings file (validated here), after keeping a copy of the current settings. */
+  importSettings(data: unknown): Promise<ImportResult>
   getSetupStatus(): Promise<SetupStatus>
   /** Starts the run and returns its id; progress arrives as 'setup-progress' events. */
   runSetup(opts: SetupOptions): Promise<string>

@@ -363,6 +363,16 @@ export function createMockApi(): QuotaDeckApi {
       log('setOrgLabel', orgUuid, label)
       emit()
       return clone(state)
+    },
+    async exportSettings() {
+      await wait(300)
+      log('exportSettings')
+      return { ok: true, path: 'C:\\Users\\alice\\Documents\\QuotaDeck 设置备份.json' }
+    },
+    async importSettings() {
+      await wait(400)
+      log('importSettings')
+      return { ok: true, applied: { settings: 4, accounts: 2, favorites: 1, orgLabels: 1 }, dropped: ['settings.oldOption'], backupPath: 'C:\\Users\\alice\\.quotadeck\\backups\\settings-before-import.json' }
     }
   }
 
