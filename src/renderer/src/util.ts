@@ -238,3 +238,14 @@ export function formatTokens(n: number): string {
 export function sumTokens(t: TokenTotals | undefined): number {
   return t ? t.input + t.output + t.cacheWrite5m + t.cacheWrite1h + t.cacheRead : 0
 }
+
+/** Axis labels: whole dollars, thousands as k. */
+export function formatUsdAxis(n: number): string {
+  if (n >= 1000) return `$${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k`
+  return `$${Math.round(n)}`
+}
+
+/** A space between Chinese and Latin letters or digits, as Chinese typesetting expects ("副号的 5 小时"). */
+export function cjkSpace(s: string): string {
+  return s.replace(/([一-鿿])([0-9A-Za-z])/g, '$1 $2').replace(/([0-9A-Za-z%])([一-鿿])/g, '$1 $2')
+}

@@ -16,6 +16,10 @@ interface Shot {
   theme?: Exclude<ThemeSetting, 'system'>
   accent?: AccentChoice
   density?: Density
+  /** Page script to run first, e.g. to pick a remembered filter. */
+  prep?: string
+  /** Taller window for a whole-page picture. */
+  height?: number
   commands: UiCommand[]
 }
 
@@ -38,7 +42,16 @@ const README_SHOTS: Shot[] = [
 const REVIEW_SHOTS: Shot[] = [
   { name: 'overview-light', lang: 'zh-CN', theme: 'light', accent: 'indigo', density: 'comfortable', commands: [PAGE('dashboard')] },
   { name: 'overview-dark', lang: 'zh-CN', theme: 'dark', accent: 'indigo', density: 'comfortable', commands: [PAGE('dashboard')] },
-  { name: 'ledger-light', lang: 'zh-CN', theme: 'light', accent: 'indigo', density: 'comfortable', commands: [PAGE('stats')] },
+  {
+    name: 'ledger-light',
+    lang: 'zh-CN',
+    theme: 'light',
+    accent: 'indigo',
+    density: 'comfortable',
+    prep: "localStorage.setItem('qd.ledger.range', 'all')",
+    height: 1720,
+    commands: [PAGE('stats')]
+  },
   { name: 'switch-light', lang: 'zh-CN', theme: 'light', accent: 'indigo', density: 'comfortable', commands: [PAGE('dashboard'), { type: 'open-switch' }] }
 ]
 
@@ -82,6 +95,8 @@ export async function captureScreenshots(win: BrowserWindow, backend: Backend, o
       ...(shot.density ? { density: shot.density } : {})
     }
     if (Object.keys(patch).length) await backend.updateSettings(patch)
+    if (shot.prep) await win.webContents.executeJavaScript(shot.prep)
+    win.setContentSize(1180, shot.height ?? 780)
     await wait(400)
     for (const cmd of shot.commands) {
       sendCommand(win, cmd)

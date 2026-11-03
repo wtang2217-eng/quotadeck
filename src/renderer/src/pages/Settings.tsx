@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { DEFAULT_CONTINUE_PROMPT } from '@shared/defaults'
 import { formatAgo } from '@shared/format'
-import type { IntegrationStatus, Language, Settings as SettingsT, TerminalChoice, ThemeSetting } from '@shared/types'
+import type { AccentChoice, Density, IntegrationStatus, Language, Settings as SettingsT, TerminalChoice, ThemeSetting } from '@shared/types'
 import {
   IconBell,
   IconCheck,
@@ -15,7 +15,6 @@ import {
   IconSwitch,
   IconVolume
 } from '../components/icons'
-import { AccentPicker, StylePicker } from '../components/StylePicker'
 import { ConfirmButton, Segmented, Spinner, Toggle } from '../components/ui'
 import { useApp } from '../context'
 import type { TKey } from '../i18n'
@@ -34,6 +33,13 @@ const ZONES = [
   'Europe/London',
   'Europe/Berlin',
   'UTC'
+]
+
+const ACCENT_OPTIONS: { value: AccentChoice; color: string; key: TKey }[] = [
+  { value: 'indigo', color: '#3E63DD', key: 'accentIndigo' },
+  { value: 'teal', color: '#12A594', key: 'accentTeal' },
+  { value: 'orange', color: '#F76B15', key: 'accentOrange' },
+  { value: 'graphite', color: '#27272A', key: 'accentGraphite' }
 ]
 
 const SOUND_LABEL: Record<SoundName, TKey> = {
@@ -165,15 +171,6 @@ export function Settings() {
 
       <div className="settings">
         <Section icon={<IconEye size={16} />} title={t('setAppearance')}>
-          <div className="set-row top" style={{ display: 'block' }}>
-            <div className="set-text" style={{ marginBottom: 14 }}>
-              <div className="set-label">{t('setStyle')}</div>
-            </div>
-            <StylePicker value={s.uiStyle ?? 'swiss'} onChange={(v) => void update({ uiStyle: v })} />
-          </div>
-          <Row label={t('setAccent')} hint={t('setAccentHint')}>
-            <AccentPicker value={s.accent ?? 'ikb'} disabled={(s.uiStyle ?? 'swiss') !== 'swiss'} onChange={(v) => void update({ accent: v })} />
-          </Row>
           <Row label={t('setTheme')}>
             <Segmented<ThemeSetting>
               ariaLabel={t('setTheme')}
@@ -193,6 +190,40 @@ export function Settings() {
                 { value: 'system', label: t('setThemeSystem') },
                 { value: 'light', label: t('setThemeLight') },
                 { value: 'dark', label: t('setThemeDark') }
+              ]}
+            />
+          </Row>
+          <Row label={t('setAccent')} hint={t('setAccentHint')}>
+            <div className="swatch-row" role="radiogroup" aria-label={t('setAccent')}>
+              {ACCENT_OPTIONS.map((a) => (
+                <button
+                  key={a.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={s.accent === a.value}
+                  className={`swatch-btn${s.accent === a.value ? ' on' : ''}`}
+                  onClick={() => {
+                    document.documentElement.dataset.accent = a.value
+                    void update({ accent: a.value })
+                  }}
+                >
+                  <span className="swatch-dot" style={{ background: a.color }} />
+                  {t(a.key)}
+                </button>
+              ))}
+            </div>
+          </Row>
+          <Row label={t('setDensity')} hint={t('setDensityHint')}>
+            <Segmented<Density>
+              ariaLabel={t('setDensity')}
+              value={s.density === 'compact' ? 'compact' : 'comfortable'}
+              onChange={(v) => {
+                document.documentElement.dataset.density = v
+                void update({ density: v })
+              }}
+              options={[
+                { value: 'comfortable', label: t('densityComfortable') },
+                { value: 'compact', label: t('densityCompact') }
               ]}
             />
           </Row>

@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { QuotaDeckApi } from '@shared/api'
-import type { AppState, Page } from '@shared/types'
+import type { AccentChoice, AppState, Page } from '@shared/types'
+import { CommandPalette } from './components/CommandPalette'
 import { IconCheck, IconInfo, IconX, Logo } from './components/icons'
+import { Sidebar, Topbar } from './components/Shell'
 import { Ctx, type AppCtx, type DialogState, type ToastKind } from './context'
 import { EditAccountDialog, RemoveAccountDialog } from './dialogs/AccountDialogs'
 import { AddAccountDialog } from './dialogs/AddAccountDialog'
 import { SwitchDialog } from './dialogs/SwitchDialog'
 import { makeT } from './i18n'
 import { About } from './pages/About'
+import { Accounts } from './pages/Accounts'
 import { Activity } from './pages/Activity'
 import { Conversations } from './pages/Conversations'
-import { Dashboard } from './pages/Dashboard'
+import { Ledger } from './pages/Ledger'
+import { Overview } from './pages/Overview'
 import { Settings } from './pages/Settings'
+import { Setup } from './pages/Setup'
 import { configureSound, installClickSounds, play, preloadSounds } from './sound'
-import { displayName, resolveTheme, withViewTransition } from './util'
+import { resolveTheme } from './util'
 
 interface Toast {
   id: number
@@ -22,19 +27,19 @@ interface Toast {
   leaving?: boolean
 }
 
-export const NAV: { page: Page; key: 'navDashboard' | 'navConversations' | 'navActivity' | 'navSettings' | 'navAbout' }[] = [
-  { page: 'dashboard', key: 'navDashboard' },
-  { page: 'conversations', key: 'navConversations' },
-  { page: 'activity', key: 'navActivity' },
-  { page: 'settings', key: 'navSettings' },
-  { page: 'about', key: 'navAbout' }
-]
-
-/** Height of one sidebar index row, for the gliding marker. */
-const NAV_ROW = 38
+const ACCENTS: AccentChoice[] = ['indigo', 'teal', 'orange', 'graphite']
+const SCOPE_KEY = 'qd.scope'
 
 function platformName(p: string): 'mac' | 'win' | 'linux' {
   return p === 'darwin' ? 'mac' : p === 'win32' ? 'win' : 'linux'
+}
+
+function readScope(): string {
+  try {
+    return localStorage.getItem(SCOPE_KEY) || 'all'
+  } catch {
+    return 'all'
+  }
 }
 
 export function App({ api }: { api: QuotaDeckApi }) {
@@ -43,8 +48,10 @@ export function App({ api }: { api: QuotaDeckApi }) {
   const [dialog, setDialog] = useState<DialogState | null>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
   const [now, setNow] = useState(() => Date.now())
+  const [scope, setScopeRaw] = useState<string>(readScope)
+  const [palette, setPalette] = useState(false)
   const known = useRef<Set<string> | null>(null)
-  const mainRef = useRef<HTMLElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let alive = true
@@ -74,7 +81,7 @@ export function App({ api }: { api: QuotaDeckApi }) {
     if (settings) configureSound({ enabled: settings.soundEnabled, volume: settings.soundVolume })
   }, [settings?.soundEnabled, settings?.soundVolume])
 
-  // Theme: follow the setting, and the OS when the setting is "system".
+  // Theme follows the setting, and the OS when the setting is "system".
   useEffect(() => {
     if (!settings) return
     const apply = () => {
@@ -88,20 +95,30 @@ export function App({ api }: { api: QuotaDeckApi }) {
   }, [settings?.theme])
 
   useEffect(() => {
-    if (settings) document.documentElement.lang = settings.language
-  }, [settings?.language])
-
-  // Visual style and Swiss highlight color, plus the platform for window chrome spacing.
-  useEffect(() => {
     if (!settings) return
     const root = document.documentElement
-    root.dataset.style = settings.uiStyle ?? 'swiss'
-    root.dataset.accent = settings.accent ?? 'ikb'
-  }, [settings?.uiStyle, settings?.accent])
+    root.lang = settings.language
+    root.dataset.accent = ACCENTS.includes(settings.accent) ? settings.accent : 'indigo'
+    root.dataset.density = settings.density === 'compact' ? 'compact' : 'comfortable'
+  }, [settings?.language, settings?.accent, settings?.density])
 
   useEffect(() => {
     if (state) document.documentElement.dataset.platform = platformName(state.platform)
   }, [state?.platform])
+
+  // A scope whose account was removed falls back to every account.
+  useEffect(() => {
+    if (state && scope !== 'all' && !state.accounts.some((a) => a.id === scope)) setScopeRaw('all')
+  }, [state?.accounts, scope])
+
+  // The setup page opens by itself on a first start.
+  const setupShown = useRef(false)
+  useEffect(() => {
+    if (state?.needsSetup && !setupShown.current) {
+      setupShown.current = true
+      setPage('setup')
+    }
+  }, [state?.needsSetup])
 
   // Alert sounds for limit events that arrive while the app is open (never for events loaded at start).
   useEffect(() => {
@@ -120,12 +137,21 @@ export function App({ api }: { api: QuotaDeckApi }) {
     const id = Date.now() + Math.random()
     setToasts((list) => [...list.slice(-3), { id, message, kind }])
     window.setTimeout(() => setToasts((list) => list.map((x) => (x.id === id ? { ...x, leaving: true } : x))), 2600)
-    window.setTimeout(() => setToasts((list) => list.filter((x) => x.id !== id)), 2850)
+    window.setTimeout(() => setToasts((list) => list.filter((x) => x.id !== id)), 2800)
   }, [])
 
   const navigate = useCallback((p: Page) => {
-    withViewTransition(() => setPage(p))
-    mainRef.current?.scrollTo({ top: 0 })
+    setPage(p)
+    scrollRef.current?.scrollTo({ top: 0 })
+  }, [])
+
+  const setScope = useCallback((s: string) => {
+    setScopeRaw(s)
+    try {
+      localStorage.setItem(SCOPE_KEY, s)
+    } catch {
+      /* storage may be unavailable; the scope then lasts for this window only */
+    }
   }, [])
 
   useEffect(
@@ -136,13 +162,25 @@ export function App({ api }: { api: QuotaDeckApi }) {
           navigate(cmd.page)
         } else if (cmd.type === 'open-switch') {
           setPage('dashboard')
-          setDialog({ type: 'switch', mode: 'both', fromAccountId: cmd.fromAccountId, toAccountId: cmd.toAccountId })
+          setDialog({ type: 'switch', mode: 'both', fromAccountId: cmd.fromAccountId, toAccountId: cmd.toAccountId, cliSessionId: cmd.cliSessionId })
         } else if (cmd.type === 'open-add-account') {
           setDialog({ type: 'add' })
         }
       }),
     [api, navigate]
   )
+
+  // Ctrl/Cmd + K opens the command palette.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPalette((p) => !p)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const ctx = useMemo<AppCtx | null>(() => {
     if (!state) return null
@@ -159,115 +197,45 @@ export function App({ api }: { api: QuotaDeckApi }) {
       navigate,
       openDialog: setDialog,
       closeDialog: () => setDialog(null),
-      toast
+      toast,
+      scope: scope !== 'all' && state.accounts.some((a) => a.id === scope) ? scope : 'all',
+      setScope,
+      openPalette: () => setPalette(true)
     }
-  }, [api, state, now, page, navigate, toast])
+  }, [api, state, now, page, navigate, toast, scope, setScope])
 
   if (!ctx || !state) {
     return (
       <div className="splash">
-        <Logo size={44} />
-        <span className="spinner" />
+        <Logo size={36} />
       </div>
     )
   }
 
-  const { t } = ctx
-  const current = state.accounts.find((a) => a.isDesktopCurrent)
-  const limitedCount = state.accounts.filter((a) => a.status === 'limited').length
-  const integ = state.integration
-  const integOn = integ.hooksInstalled && integ.statusLineInstalled
-  const integSome = integ.hooksInstalled || integ.statusLineInstalled
-  const navIndex = NAV.findIndex((n) => n.page === page)
   const close = () => setDialog(null)
 
   return (
     <Ctx.Provider value={ctx}>
       <div className="app">
-        <aside className="sidebar">
-          <div className="strip drag" />
-          <div className="brand">
-            <Logo size={30} />
-            <div className="brand-text">
-              <div className="brand-name">QuotaDeck</div>
-              <div className="brand-tag">{t('brandTag')}</div>
+        <Sidebar />
+        <main className="main">
+          <Topbar />
+          <div className="scroll" ref={scrollRef}>
+            <div key={page + ctx.scope}>
+              {page === 'dashboard' && <Overview />}
+              {page === 'stats' && <Ledger />}
+              {page === 'conversations' && <Conversations />}
+              {page === 'accounts' && <Accounts />}
+              {page === 'activity' && <Activity />}
+              {page === 'settings' && <Settings />}
+              {page === 'about' && <About />}
+              {page === 'setup' && <Setup />}
             </div>
           </div>
-          <nav className="nav" aria-label="main">
-            <span className="nav-mark" style={{ transform: `translateY(${navIndex * NAV_ROW}px)` }} />
-            {NAV.map((n, i) => (
-              <button
-                key={n.page}
-                type="button"
-                className={`nav-item${page === n.page ? ' active' : ''}`}
-                aria-current={page === n.page ? 'page' : undefined}
-                onClick={() => page !== n.page && navigate(n.page)}
-              >
-                <span className="nav-num">{String(i + 1).padStart(2, '0')}</span>
-                <span className="nav-label">{t(n.key)}</span>
-                {n.page === 'dashboard' && limitedCount > 0 && <span className="nav-count">{limitedCount}</span>}
-              </button>
-            ))}
-          </nav>
-          <div className="sidebar-foot">
-            <div className="side-status">
-              <button type="button" className="side-row" onClick={() => navigate('dashboard')}>
-                <span className="side-row-label">{t('sideDesktop')}</span>
-                <span className="side-row-value">
-                  {!state.desktop.found ? (
-                    <>
-                      <span className="dot-sm dot-muted" />
-                      {t('sideDesktopNone')}
-                    </>
-                  ) : current ? (
-                    <>
-                      <span className={`dot-sm ${current.status === 'limited' ? 'dot-bad' : current.status === 'warn' ? 'dot-warn' : 'dot-ok'}`} />
-                      <span className="ellipsis">{displayName(current)}</span>
-                    </>
-                  ) : state.desktop.currentAccountUuid ? (
-                    <>
-                      <span className="dot-sm dot-muted" />
-                      {t('sideDesktopUnknownAccount')}
-                    </>
-                  ) : (
-                    <>
-                      <span className="dot-sm dot-muted" />
-                      {t('sideDesktopIdle')}
-                    </>
-                  )}
-                </span>
-              </button>
-              <button type="button" className="side-row" onClick={() => navigate('settings')}>
-                <span className="side-row-label">{t('sideIntegration')}</span>
-                <span className="side-row-value">
-                  <span className={`dot-sm ${integOn ? 'dot-ok' : integSome ? 'dot-warn' : 'dot-muted'}`} />
-                  {integOn ? t('sideIntegrationOn') : integSome ? t('sideIntegrationPartial') : t('sideIntegrationOff')}
-                </span>
-              </button>
-            </div>
-            <div className="side-version">
-              <span>v{state.appVersion}</span>
-              {state.demo && <span className="badge badge-accent">{t('demoMode')}</span>}
-            </div>
-          </div>
-        </aside>
-
-        <main className="main" ref={mainRef}>
-          <div className="topbar drag">
-            <span>
-              <b>QuotaDeck</b> <i>/</i> {String(navIndex + 1).padStart(2, '0')} {t(NAV[navIndex]?.key ?? 'navDashboard')}
-            </span>
-            <span className="grow" />
-            <span className="topbar-meta">{t('topbarMeta')}</span>
-          </div>
-          {page === 'dashboard' && <Dashboard />}
-          {page === 'conversations' && <Conversations />}
-          {page === 'activity' && <Activity />}
-          {page === 'settings' && <Settings />}
-          {page === 'about' && <About />}
         </main>
       </div>
 
+      {palette && <CommandPalette onClose={() => setPalette(false)} />}
       {dialog?.type === 'add' && <AddAccountDialog key="add" reLoginAccountId={dialog.reLoginAccountId} onClose={close} />}
       {dialog?.type === 'switch' && (
         <SwitchDialog
@@ -277,6 +245,7 @@ export function App({ api }: { api: QuotaDeckApi }) {
           toAccountId={dialog.toAccountId}
           cliSessionId={dialog.cliSessionId}
           cwd={dialog.cwd}
+          title={dialog.title}
           onClose={close}
         />
       )}
@@ -286,7 +255,7 @@ export function App({ api }: { api: QuotaDeckApi }) {
       <div className="toasts" aria-live="polite">
         {toasts.map((x) => (
           <div key={x.id} className={`toast ${x.kind}${x.leaving ? ' leaving' : ''}`}>
-            <span className="toast-icon">{x.kind === 'ok' ? <IconCheck size={13} stroke={3} /> : x.kind === 'bad' ? <IconX size={13} stroke={3} /> : <IconInfo size={13} stroke={2.6} />}</span>
+            <span className="toast-icon">{x.kind === 'ok' ? <IconCheck /> : x.kind === 'bad' ? <IconX /> : <IconInfo />}</span>
             <span>{x.message}</span>
           </div>
         ))}

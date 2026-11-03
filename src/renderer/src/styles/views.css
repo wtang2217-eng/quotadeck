@@ -287,6 +287,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.meter-label {
+  color: var(--text-3);
+}
 .meter {
   position: relative;
   height: 4px;
@@ -657,8 +660,8 @@
 }
 .pick-meters {
   display: grid;
-  grid-template-columns: repeat(2, 84px);
-  gap: 12px;
+  grid-template-columns: repeat(2, 104px);
+  gap: 14px;
 }
 .where {
   display: grid;
@@ -667,6 +670,7 @@
 }
 .where-opt {
   display: grid;
+  align-content: start;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 4px 10px;
   padding: 11px 12px;
@@ -777,4 +781,137 @@
   height: 14px;
   border-radius: 50%;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.chart-empty {
+  position: absolute;
+  inset: 0 0 22px 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+/* ---------- Scope marks, bell ---------- */
+.scope-mark.sm {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 11.5px;
+}
+.bell {
+  position: relative;
+}
+.bell-dot {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bad);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+/* ---------- Command palette ---------- */
+.palette-backdrop {
+  align-items: flex-start;
+  padding-top: 96px;
+}
+.palette {
+  width: min(560px, 100%);
+}
+.palette-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-3);
+}
+.palette-input input {
+  flex: 1;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: var(--text-1);
+  font-size: 14px;
+  outline: none;
+}
+.palette-input input::placeholder {
+  color: var(--text-4);
+}
+.palette-input input:focus-visible {
+  box-shadow: none;
+}
+.palette-list {
+  max-height: 360px;
+  overflow: auto;
+  padding: 4px;
+}
+.palette-list .menu-item.sel {
+  background: var(--hover);
+}
+.palette-empty {
+  padding: 22px 12px;
+  font-size: 13px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+/* ---------- Tray popover ---------- */
+.tray {
+  width: 360px;
+  background: var(--surface);
+}
+.tray-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+.tray-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.tray-sub {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.tray-list {
+  padding: 4px 0;
+}
+.tray-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px 100px;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 14px;
+}
+.tray-row.is-current::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.tray-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.tray-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--line);
 }

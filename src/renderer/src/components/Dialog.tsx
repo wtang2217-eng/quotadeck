@@ -50,7 +50,9 @@ export function Dialog({
       if (e.key === 'Escape' && dismissable) close()
     }
     window.addEventListener('keydown', onKey)
-    const first = panel.current?.querySelector<HTMLElement>('[data-autofocus], input, textarea, select, button.btn-primary')
+    const first =
+      panel.current?.querySelector<HTMLElement>('[data-autofocus]:not(:disabled)') ??
+      panel.current?.querySelector<HTMLElement>('input, textarea, select, button.btn-primary')
     first?.focus({ preventScroll: true })
     return () => window.removeEventListener('keydown', onKey)
   }, [close, dismissable])

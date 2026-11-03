@@ -39,12 +39,14 @@ export function Segmented<V extends string>({
   value,
   options,
   onChange,
-  ariaLabel
+  ariaLabel,
+  small
 }: {
   value: V
-  options: { value: V; label: ReactNode }[]
+  options: { value: V; label: ReactNode; disabled?: boolean }[]
   onChange: (v: V, e: MouseEvent<HTMLButtonElement>) => void
   ariaLabel: string
+  small?: boolean
 }) {
   const wrap = useRef<HTMLDivElement>(null)
   const [pill, setPill] = useState<{ x: number; w: number } | null>(null)
@@ -53,7 +55,7 @@ export function Segmented<V extends string>({
     if (el) setPill({ x: el.offsetLeft, w: el.offsetWidth })
   }, [value, options.length])
   return (
-    <div className="segmented" role="radiogroup" aria-label={ariaLabel} ref={wrap}>
+    <div className={`segmented${small ? ' sm' : ''}`} role="radiogroup" aria-label={ariaLabel} ref={wrap}>
       {pill && <span className="segmented-pill" style={{ width: pill.w, transform: `translateX(${pill.x}px)` }} />}
       {options.map((o) => (
         <button
@@ -62,6 +64,7 @@ export function Segmented<V extends string>({
           role="radio"
           aria-checked={o.value === value}
           className={o.value === value ? 'on' : ''}
+          disabled={o.disabled}
           onClick={(e) => o.value !== value && onChange(o.value, e)}
         >
           {o.label}

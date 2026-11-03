@@ -3,14 +3,14 @@ import '@vitejs/plugin-react/preamble'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { createMockApi } from './mock'
-// Fonts ship with the app (no network at runtime): Inter for text and numbers, JetBrains Mono for labels,
-// Playfair Display for the editorial style. Chinese text uses the system fonts.
+// Inter ships with the app (no network at runtime) for Latin text and numbers; Chinese uses the system fonts.
 import '@fontsource-variable/inter'
-import '@fontsource-variable/jetbrains-mono'
-import '@fontsource-variable/playfair-display'
-import '@fontsource-variable/playfair-display/wght-italic.css'
 import './styles/index.css'
+import { TrayView } from './pages/TrayView'
 
 const api = window.qd ?? createMockApi()
+// The tray popover loads the same page with ?view=tray and sizes its window to the content.
+const tray = new URLSearchParams(location.search).get('view') === 'tray'
+if (tray) document.documentElement.dataset.view = 'tray'
 
-createRoot(document.getElementById('root')!).render(<App api={api} />)
+createRoot(document.getElementById('root')!).render(tray ? <TrayView api={api} /> : <App api={api} />)

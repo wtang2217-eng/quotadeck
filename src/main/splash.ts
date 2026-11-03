@@ -22,19 +22,19 @@ const PROGRESS: Record<SplashStep, number> = { accounts: 0.34, desktop: 0.72, re
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 
-/** The eclipse: a dark moon over a thin corona ring that breathes, and the diamond-ring flare. */
+/** The eclipse: a thin corona ring that breathes behind a dark moon set slightly off center, and the diamond-ring flare. */
 function eclipseSvg(): string {
-  return `<svg class="mark" viewBox="0 0 64 64" width="52" height="52" aria-hidden="true">
+  return `<svg class="mark" viewBox="0 0 96 96" width="76" height="76" aria-hidden="true">
   <defs>
-    <linearGradient id="corona" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+    <linearGradient id="corona" x1="14" y1="14" x2="82" y2="82" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#2DD4BF"/><stop offset=".42" stop-color="#60A5FA"/><stop offset=".72" stop-color="#A78BFA"/><stop offset="1" stop-color="#F9A8D4"/>
     </linearGradient>
-    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3.2"/></filter>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
   </defs>
-  <circle class="glow" cx="32" cy="32" r="21" fill="none" stroke="url(#corona)" stroke-width="5" filter="url(#soft)"/>
-  <circle cx="32" cy="32" r="21" fill="none" stroke="url(#corona)" stroke-width="1.4"/>
-  <circle cx="33.6" cy="31" r="20.2" fill="#0C0D12"/>
-  <circle class="flare" cx="16.6" cy="21.4" r="1.7" fill="#FFFFFF"/>
+  <circle class="glow" cx="48" cy="48" r="29" fill="none" stroke="url(#corona)" stroke-width="7" filter="url(#soft)"/>
+  <circle cx="48" cy="48" r="29" fill="none" stroke="url(#corona)" stroke-width="1.6"/>
+  <circle cx="50.6" cy="46.2" r="27.4" fill="#0C0D12"/>
+  <circle class="flare" cx="25.4" cy="31.6" r="2.1" fill="#FFFFFF"/>
 </svg>`
 }
 
@@ -43,33 +43,31 @@ export function splashHtml(opts: { dark: boolean; version: string; lang: Languag
   const step = opts.step ?? 'accounts'
   const c = opts.dark
     ? { panel: '#121215', line: 'rgba(255,255,255,0.08)', t1: '#EDEDEF', t2: '#A1A1AA', t3: '#7D7D87', track: '#232329', fill: '#C8C8CF', shadow: 'rgba(0,0,0,0.55)' }
-    : { panel: '#FFFFFF', line: 'rgba(24,24,27,0.08)', t1: '#18181B', t2: '#52525B', t3: '#71717A', track: '#EEEEF1', fill: '#3F3F46', shadow: 'rgba(16,16,20,0.18)' }
+    : { panel: '#FFFFFF', line: 'rgba(24,24,27,0.08)', t1: '#18181B', t2: '#52525B', t3: '#71717A', track: '#EEEEF1', fill: '#3F3F46', shadow: 'rgba(16,16,20,0.16)' }
   return `<!doctype html><html lang="${opts.lang}"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <style>
   *{box-sizing:border-box;margin:0}
   html,body{height:100%;background:transparent;overflow:hidden;-webkit-user-select:none;user-select:none;cursor:default}
   body{display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei UI','Microsoft YaHei','Noto Sans CJK SC',sans-serif;-webkit-font-smoothing:antialiased}
-  .panel{position:relative;width:440px;height:280px;padding:30px 32px 26px;display:flex;flex-direction:column;background:${c.panel};border:1px solid ${c.line};border-radius:14px;box-shadow:0 1px 2px ${c.shadow},0 18px 40px -16px ${c.shadow};animation:in 220ms cubic-bezier(.2,.8,.2,1) both;transition:opacity 180ms ease-out,transform 180ms ease-out}
+  .panel{position:relative;width:440px;height:280px;padding:34px 36px 28px;display:flex;flex-direction:column;align-items:center;text-align:center;background:${c.panel};border:1px solid ${c.line};border-radius:14px;box-shadow:0 1px 2px ${c.shadow},0 20px 44px -18px ${c.shadow};animation:in 220ms cubic-bezier(.2,.8,.2,1) both;transition:opacity 180ms ease-out,transform 180ms ease-out}
   .out .panel{opacity:0;transform:scale(.985)}
   @keyframes in{from{opacity:0;transform:translateY(6px)}}
   .mark{display:block}
-  .glow{transform-origin:32px 32px;opacity:.6;animation:breathe 2.8s ease-in-out infinite alternate}
-  .flare{animation:twinkle 2.8s ease-in-out infinite alternate}
-  @keyframes breathe{from{opacity:.35;transform:scale(.97)}to{opacity:.85;transform:scale(1.03)}}
-  @keyframes twinkle{from{opacity:.55}to{opacity:1}}
-  .name{display:flex;align-items:baseline;gap:10px;margin-top:22px}
-  .word{font-size:22px;font-weight:600;letter-spacing:-.02em;color:${c.t1}}
+  .glow{transform-origin:48px 48px;opacity:.55;animation:breathe 3s ease-in-out infinite alternate}
+  .flare{animation:twinkle 3s ease-in-out infinite alternate}
+  @keyframes breathe{from{opacity:.3;transform:scale(.97)}to{opacity:.8;transform:scale(1.035)}}
+  @keyframes twinkle{from{opacity:.6}to{opacity:1}}
+  .name{display:flex;align-items:baseline;gap:8px;margin-top:16px}
+  .word{font-size:21px;font-weight:600;letter-spacing:-.02em;color:${c.t1}}
   .ver{font-size:12px;color:${c.t3};font-variant-numeric:tabular-nums}
-  .tag{margin-top:6px;font-size:13px;color:${c.t2}}
-  .foot{margin-top:auto}
-  .status{font-size:12px;color:${c.t3};height:16px;transition:opacity 150ms ease-out}
+  .tag{margin-top:4px;font-size:12.5px;color:${c.t2}}
+  .foot{margin-top:auto;width:100%;max-width:300px}
+  .status{font-size:12px;color:${c.t3};height:16px}
   .track{position:relative;height:2px;margin-top:10px;background:${c.track};border-radius:2px;overflow:hidden}
   .bar{position:absolute;left:0;top:0;bottom:0;width:${PROGRESS[step] * 100}%;background:${c.fill};border-radius:2px;transition:width 420ms cubic-bezier(.2,.8,.2,1)}
-  .bar::after{content:'';position:absolute;top:0;bottom:0;width:60px;right:0;background:linear-gradient(90deg,transparent,${c.panel});opacity:.6;animation:sheen 1.4s ease-in-out infinite}
-  @keyframes sheen{0%{transform:translateX(-120px);opacity:0}50%{opacity:.6}100%{transform:translateX(20px);opacity:0}}
-  @media (prefers-reduced-motion:reduce){.panel,.glow,.flare,.bar::after{animation:none}.bar{transition:none}}
-  html.still .panel,html.still .glow,html.still .flare,html.still .bar::after{animation:none}
+  @media (prefers-reduced-motion:reduce){.panel,.glow,.flare{animation:none}.bar{transition:none}}
+  html.still .panel,html.still .glow,html.still .flare{animation:none}
 </style></head>
 <body><div class="panel">
   ${eclipseSvg()}
