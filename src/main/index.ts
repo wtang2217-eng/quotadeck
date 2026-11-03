@@ -25,6 +25,8 @@ const IS_MAC = process.platform === 'darwin'
 const IS_WIN = process.platform === 'win32'
 
 if (SCREENSHOTS) app.commandLine.appendSwitch('force-device-scale-factor', '1.5')
+// A virtual Linux display (CI) has no GPU; software rendering keeps page captures reliable there.
+if ((SCREENSHOTS || CAPTURE) && process.platform === 'linux') app.disableHardwareAcceleration()
 // Demo runs never touch the real profile, and may run next to the real app.
 if (DEMO) app.setPath('userData', path.join(app.getPath('temp'), 'QuotaDeck-demo'))
 
@@ -286,9 +288,15 @@ async function main(): Promise<void> {
     const target = win
     target.webContents.once('did-finish-load', async () => {
       target.show()
-      await captureScreenshots(target, backend, path.resolve(shotsDir), SCREENSHOTS ? 'readme' : 'live')
-      quitting = true
-      app.quit()
+      try {
+        await captureScreenshots(target, backend, path.resolve(shotsDir), SCREENSHOTS ? 'readme' : 'live')
+      } catch (e) {
+        console.error('screenshots failed:', e)
+        process.exitCode = 1
+      } finally {
+        quitting = true
+        app.quit()
+      }
     })
   }
 }

@@ -112,7 +112,8 @@ export async function captureScreenshots(win: BrowserWindow, backend: Backend, o
       continue
     }
     if (shot.kind === 'tray') {
-      fs.writeFileSync(path.join(outDir, `${shot.name}.png`), await captureTray(win))
+      const png = await captureTray(win)
+      if (png) fs.writeFileSync(path.join(outDir, `${shot.name}.png`), png)
       continue
     }
     if (shot.prep) await win.webContents.executeJavaScript(shot.prep)
@@ -123,13 +124,26 @@ export async function captureScreenshots(win: BrowserWindow, backend: Backend, o
       await wait(800)
     }
     await wait(1000)
-    const image = await win.webContents.capturePage()
-    fs.writeFileSync(path.join(outDir, `${shot.name}.png`), image.toPNG())
+    const png = await capture(win)
+    if (png) fs.writeFileSync(path.join(outDir, `${shot.name}.png`), png)
   }
 }
 
+/** capturePage can fail on a virtual display (UnknownVizError); try again before giving up on one picture. */
+async function capture(win: BrowserWindow): Promise<Buffer | undefined> {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return (await win.webContents.capturePage()).toPNG()
+    } catch (e) {
+      console.warn(`capturePage failed (${attempt}/3): ${(e as Error).message}`)
+      await wait(700)
+    }
+  }
+  return undefined
+}
+
 /** The tray popover page in a window of its size, rendered like the real popover (same page, ?view=tray). */
-async function captureTray(main: BrowserWindow): Promise<Buffer> {
+async function captureTray(main: BrowserWindow): Promise<Buffer | undefined> {
   const win = new BrowserWindow({
     width: 360,
     height: 268,
@@ -143,7 +157,7 @@ async function captureTray(main: BrowserWindow): Promise<Buffer> {
     await win.loadURL(url.toString())
     await win.webContents.executeJavaScript("document.documentElement.dataset.motion = 'off'; document.documentElement.dataset.capture = '1'")
     await wait(900)
-    return (await win.webContents.capturePage()).toPNG()
+    return await capture(win)
   } finally {
     win.destroy()
   }
