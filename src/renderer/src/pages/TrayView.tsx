@@ -66,6 +66,11 @@ export function TrayView({ api }: { api: QuotaDeckApi }) {
           </span>
         </div>
         <div className="tray-list">
+          <div className="tray-row tray-cols" aria-hidden="true">
+            <span />
+            <span>{t('trayCol5h')}</span>
+            <span>{t('trayColWeek')}</span>
+          </div>
           {state.accounts.map((a) => (
             <div key={a.id} className={`tray-row${a.isDesktopCurrent ? ' is-current' : ''}`}>
               <div className="tray-name ellipsis" title={displayName(a)}>

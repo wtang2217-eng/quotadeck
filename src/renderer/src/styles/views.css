@@ -293,8 +293,14 @@
   color: var(--text-4);
 }
 .meter-reset {
+  font-size: 12px;
+  color: var(--text-3);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.meter-cell .meter-reset {
+  margin-top: -1px;
 }
 .meter-label {
   color: var(--text-3);
@@ -972,6 +978,11 @@
   width: 2px;
   border-radius: 2px;
   background: var(--accent);
+}
+.tray-row.tray-cols {
+  min-height: 24px;
+  font-size: 11px;
+  color: var(--text-3);
 }
 .tray-name {
   font-size: 13px;

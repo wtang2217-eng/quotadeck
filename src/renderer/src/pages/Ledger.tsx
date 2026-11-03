@@ -249,6 +249,25 @@ function LedgerBody({ stats, group }: { stats: UsageStats; group: Group }) {
               <Share value={m.costUsd} total={total.costUsd} />
             </div>
           ))}
+          {(total.background.costUsd > 0 || sumTokens(total.background.tokens) > 0) && (
+            <div className="dt-row" style={{ minHeight: 52 }}>
+              <div className="dt-cell">
+                <div className="dt-name">
+                  <span className="ellipsis">{t('lgBackground')}</span>
+                </div>
+                <div className="dt-sub" style={{ whiteSpace: 'normal' }}>
+                  {t('lgBackgroundHint')}
+                  {total.background.webSearches > 0 ? ` · ${t('lgWebSearches', { n: total.background.webSearches })}` : ''}
+                </div>
+              </div>
+              <span className="dt-num r">{formatTokens(total.background.tokens.input)}</span>
+              <span className="dt-num r">{formatTokens(total.background.tokens.output)}</span>
+              <span className="dt-num r">{formatTokens(cw(total.background.tokens))}</span>
+              <span className="dt-num r">{formatTokens(total.background.tokens.cacheRead)}</span>
+              <span className="dt-num r">{formatUsd(total.background.costUsd)}</span>
+              <Share value={total.background.costUsd} total={total.costUsd} />
+            </div>
+          )}
         </div>
       </div>
     </section>

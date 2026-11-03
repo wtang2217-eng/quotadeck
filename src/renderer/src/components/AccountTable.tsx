@@ -67,16 +67,16 @@ export function MeterCell({
         <span className={`meter-pct${shown.pct === undefined ? ' na' : cls}`}>
           {shown.pct === undefined ? '—' : `${shown.estimated ? t('approx') : ''}${Math.round(shown.pct)}%`}
         </span>
-        {resetLabel && (
-          <span className="meter-reset has-tip-anchor" title={reset ? formatIn(reset, lang, now) : undefined}>
-            {resetLabel}
-          </span>
-        )}
       </div>
       <div className="meter" aria-hidden="true">
         {w && <div className={`meter-fill${cls}`} style={{ width: `${recorded}%` }} />}
         {extra > 0 && <div className={`meter-est${cls}`} style={{ left: `${recorded}%`, width: `${extra}%` }} />}
       </div>
+      {resetLabel && (
+        <span className="meter-reset" title={reset ? formatIn(reset, lang, now) : undefined}>
+          {resetLabel}
+        </span>
+      )}
     </div>
   )
 }
