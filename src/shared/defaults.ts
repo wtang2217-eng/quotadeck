@@ -36,6 +36,9 @@ export function defaultSettings(systemLocale = 'en'): Settings {
     terminal: 'auto',
     acceptedOwnershipNotice: false,
     soundEnabled: true,
-    soundVolume: 0.5
+    soundVolume: 0.5,
+    uiStyle: 'swiss',
+    accent: 'ikb',
+    trayShowPercent: true
   }
 }

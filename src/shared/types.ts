@@ -226,7 +226,16 @@ export interface Settings {
   soundEnabled: boolean
   /** Sound volume, 0-1. */
   soundVolume: number
+  /** Visual style of the whole app. */
+  uiStyle: UiStyle
+  /** Highlight color of the Swiss style. */
+  accent: AccentChoice
+  /** macOS: show the desktop account's 5-hour usage next to the menu bar icon. */
+  trayShowPercent: boolean
 }
+
+export type UiStyle = 'swiss' | 'editorial' | 'eclipse'
+export type AccentChoice = 'ikb' | 'lemon' | 'green' | 'orange'
 
 export interface CliInfo {
   found: boolean
