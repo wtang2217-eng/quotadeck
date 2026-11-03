@@ -26,7 +26,8 @@ const FAMILY_NAME: Record<Exclude<ModelFamily, 'other'>, string> = { fable: 'Fab
 
 /** Family and version from a model id such as "claude-opus-4-1-20250805" or "claude-3-5-haiku-20241022". */
 export function modelInfo(model: string): ModelInfo {
-  const m = /(fable|mythos|opus|sonnet|haiku)-(\d+)(?:-(\d{1,2}))?(?!\d)/i.exec(model)
+  // Versions have one or two digits; longer numbers are release dates.
+  const m = /(fable|mythos|opus|sonnet|haiku)-(\d{1,2})(?:-(\d{1,2}))?(?!\d)/i.exec(model)
   const old = m ? undefined : /claude-(\d)-(\d)-(opus|sonnet|haiku)/i.exec(model)
   const name = (m?.[1] ?? old?.[3])?.toLowerCase()
   if (!name) return { family: 'other', label: model || '?' }

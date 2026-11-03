@@ -27,7 +27,7 @@ export interface TranscriptMeta {
 
 const HEAD_BYTES = 96 * 1024
 const TAIL_BYTES = 512 * 1024
-const CACHE_VERSION = 3
+const CACHE_VERSION = 4
 
 let cache: Record<string, TranscriptMeta> | undefined
 
@@ -137,6 +137,8 @@ export function readTranscriptMeta(file: string): TranscriptMeta | undefined {
   // are still in the raw text.
   if (!meta.cwd) meta.cwd = rawField(head, 'cwd')
   if (!meta.entrypoint) meta.entrypoint = rawField(head, 'entrypoint')
+  // Every message carries the working folder, so the tail has it when the head did not parse.
+  if (!meta.cwd) meta.cwd = tailLines.map((j) => j.cwd).find((c): c is string => typeof c === 'string') ?? (tail ? rawField(tail, 'cwd') : undefined)
   meta.title = (customTitle || aiTitle)?.trim().slice(0, 200) || undefined
   if (meta.lastPrompt) meta.lastPrompt = meta.lastPrompt.replace(/\s+/g, ' ').trim().slice(0, 200)
   if (lastTs) meta.lastActivityAt = Math.max(lastTs, meta.createdAt ?? 0)

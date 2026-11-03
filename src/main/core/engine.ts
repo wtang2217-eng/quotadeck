@@ -240,8 +240,17 @@ export class Engine extends EventEmitter {
     return idx >= 0 ? s[idx].org : undefined
   }
 
-  /** Read new replies from the transcripts and recompute the live estimates. */
-  private async refreshEstimates(): Promise<void> {
+  private estimating?: Promise<void>
+
+  /** Read new replies from the transcripts and recompute the live estimates. Callers share a run in progress. */
+  private refreshEstimates(): Promise<void> {
+    this.estimating ??= this.computeEstimates().finally(() => {
+      this.estimating = undefined
+    })
+    return this.estimating
+  }
+
+  private async computeEstimates(): Promise<void> {
     try {
       await this.scanner.scan(Date.now(), this.orgAt)
       const desktopSessions = this.desktopSessionIds()
@@ -1313,15 +1322,22 @@ export class Engine extends EventEmitter {
   // ---------------------------------------------------------------- statistics
 
   async getStats(query: StatsQuery): Promise<UsageStats> {
-    // The first request after start may come before the first scan; make sure the buckets are filled.
-    if (!this.scanner.complete && !this.scanner.scanning) await this.refreshEstimates()
+    // Right after the first start the transcripts are still being read (about 10 s for a month); wait for it.
+    if (!this.scanner.complete) await this.refreshEstimates()
     const key = `${query.range}|${query.accountId ?? ''}|${this.settings.timezone}`
     const hit = this.statsCache.get(key)
     if (hit && hit.revision === this.scanner.revision && Date.now() - hit.at < MIN) return hit.value
     const titles = new Map<string, TranscriptMeta>()
     for (const t of listTranscripts()) titles.set(t.cliSessionId, t)
     const desktopTitles = new Map<string, string>()
-    for (const f of this.folders) for (const s of readSessions(f)) if (s.cliSessionId && s.title && !desktopTitles.has(s.cliSessionId)) desktopTitles.set(s.cliSessionId, s.title)
+    const desktopCwds = new Map<string, string>()
+    for (const f of this.folders) {
+      for (const s of readSessions(f)) {
+        if (!s.cliSessionId) continue
+        if (s.title && !desktopTitles.has(s.cliSessionId)) desktopTitles.set(s.cliSessionId, s.title)
+        if (s.cwd && !desktopCwds.has(s.cliSessionId)) desktopCwds.set(s.cliSessionId, s.cwd)
+      }
+    }
     const value = computeStats(Object.values(this.scanner.buckets), {
       range: query.range,
       accountId: query.accountId,
@@ -1332,7 +1348,7 @@ export class Engine extends EventEmitter {
         const t = titles.get(id)
         return {
           title: desktopTitles.get(id) ?? t?.title ?? t?.firstPrompt,
-          cwd: t?.cwd,
+          cwd: t?.cwd ?? desktopCwds.get(id),
           projectDir: t?.projectDir ?? this.scanner.projectOf(id),
           lastActivityAt: t?.lastActivityAt
         }
@@ -1340,7 +1356,7 @@ export class Engine extends EventEmitter {
       partial: !this.scanner.complete
     })
     saveHistoryCache()
-    this.statsCache.set(key, { at: Date.now(), revision: this.scanner.revision, value })
+    if (!value.partial) this.statsCache.set(key, { at: Date.now(), revision: this.scanner.revision, value })
     return value
   }
 
