@@ -47,6 +47,8 @@ export interface Backend extends EventEmitter {
   /** The conversation as Markdown, with a file name (without extension) to suggest. */
   exportMarkdown(cliSessionId: string): Promise<{ markdown: string; fileName: string } | undefined>
   getStats(query: StatsQuery): Promise<UsageStats>
+  /** The ledger as CSV (one row per day × account × model) and a file name (without extension) to suggest. */
+  ledgerCsv(query: StatsQuery): Promise<{ csv: string; fileName: string }>
   getSetupStatus(): Promise<SetupStatus>
   /** Starts the run and returns its id; progress arrives as 'setup-progress' events. */
   runSetup(opts: SetupOptions): Promise<string>

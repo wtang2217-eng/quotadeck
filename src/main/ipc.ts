@@ -2,9 +2,10 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { IPC } from '@shared/api'
-import type { ContinueRequest, ConversationQuery, LoginProgress, PendingSwitch, Settings, SetupProgress, UiCommand } from '@shared/types'
+import type { ContinueRequest, ConversationQuery, LoginProgress, PendingSwitch, Settings, SetupProgress, StatsQuery, StatsRange, UiCommand } from '@shared/types'
 import type { Backend } from './backend'
 
+const STATS_RANGES: StatsRange[] = ['today', '7d', '30d', '90d', 'all']
 const SESSION_ID = /^[0-9a-f-]{36}$/i
 const DESKTOP_ID = /^local_[A-Za-z0-9-]{1,64}$/
 /** The only kind of claude:// link QuotaDeck opens: the desktop app's own "continue this Code session" entry point. */
@@ -119,9 +120,28 @@ export function registerIpc(backend: Backend, getWindow: () => BrowserWindow | u
       return { ok: false, error: (e as Error).message }
     }
   })
-  ipcMain.handle(IPC.getStats, (_e, q: { range?: unknown; accountId?: unknown } | undefined) =>
-    backend.getStats({ range: q?.range === '30d' ? '30d' : '7d', accountId: str(q?.accountId, 100) || undefined })
-  )
+  const statsQuery = (q: { range?: unknown; accountId?: unknown } | undefined): StatsQuery => ({
+    range: STATS_RANGES.includes(q?.range as StatsRange) ? (q!.range as StatsRange) : '7d',
+    accountId: str(q?.accountId, 100) || 'all'
+  })
+  ipcMain.handle(IPC.getStats, (_e, q: { range?: unknown; accountId?: unknown } | undefined) => backend.getStats(statsQuery(q)))
+  ipcMain.handle(IPC.exportLedgerCsv, async (_e, q: { range?: unknown; accountId?: unknown } | undefined) => {
+    const doc = await backend.ledgerCsv(statsQuery(q))
+    const win = getWindow()
+    const options = {
+      defaultPath: path.join(app.getPath('documents'), `${doc.fileName}.csv`),
+      filters: [{ name: 'CSV', extensions: ['csv'] }]
+    }
+    const r = win && !win.isDestroyed() ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
+    if (r.canceled || !r.filePath) return { ok: false, cancelled: true }
+    try {
+      // The byte order mark makes Excel read the Chinese text as UTF-8.
+      fs.writeFileSync(r.filePath, `﻿${doc.csv}`, 'utf8')
+      return { ok: true, path: r.filePath }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
   ipcMain.handle(IPC.getSetupStatus, () => backend.getSetupStatus())
   ipcMain.handle(IPC.runSetup, async (_e, o: { installCli?: unknown; connectIntegration?: unknown; openAtLogin?: unknown } | undefined) => ({
     runId: await backend.runSetup({ installCli: o?.installCli !== false, connectIntegration: o?.connectIntegration !== false, openAtLogin: o?.openAtLogin === true })

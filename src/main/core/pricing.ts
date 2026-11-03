@@ -1,17 +1,57 @@
 // What the tokens in a transcript would cost at Anthropic's API list prices. Subscriptions are not billed this
 // way; the number only shows how much work an account did, and the UI labels it "for reference only".
 
-import type { ModelFamily, TokenTotals } from '@shared/types'
+import type { ModelFamily, ModelPrice } from '@shared/types'
 
-/** Date of the price list below. */
+/** Date of the price list below (Anthropic's API prices as listed in the claude-api skill). */
 export const PRICE_LIST_DATE = '2026-10-06'
 
-interface Price {
-  /** US dollars per million input tokens. */
-  input: number
-  output: number
-  /** Cache reads; 10% of input unless the list says otherwise. */
-  cacheRead?: number
+interface PriceRow extends ModelPrice {
+  match: RegExp
+}
+
+/**
+ * US dollars per million tokens, one row per model; the first matching row wins. Cache writes cost 1.25x input
+ * (5 minutes) or 2x input (1 hour); cache reads 0.1x input unless a row says otherwise.
+ * Rows marked "earlier list" are models the current list no longer prices; their prices are Anthropic's last
+ * published ones.
+ */
+const ROWS: PriceRow[] = [
+  { model: 'Fable 5.1', match: /(fable|mythos)-5-1(?!\d)/i, input: 10, output: 50, cacheRead: 0.25 },
+  { model: 'Fable 5', match: /(fable|mythos)-5(?![-\d])/i, input: 10, output: 50, cacheRead: 1 },
+  { model: 'Opus 5.5', match: /opus-5-5(?!\d)/i, input: 4, output: 20, cacheRead: 0.2 },
+  { model: 'Opus 5', match: /opus-5(?![-\d])/i, input: 5, output: 25 },
+  { model: 'Opus 4.8', match: /opus-4-8(?!\d)/i, input: 5, output: 25 },
+  { model: 'Opus 4.7', match: /opus-4-7(?!\d)/i, input: 5, output: 25 },
+  { model: 'Opus 4.6', match: /opus-4-6(?!\d)/i, input: 5, output: 25 },
+  // Earlier list.
+  { model: 'Opus 4.5', match: /opus-4-5(?!\d)/i, input: 5, output: 25 },
+  { model: 'Opus 4.1', match: /opus-4-1(?!\d)/i, input: 15, output: 75 },
+  { model: 'Opus 4', match: /opus-4(?![-\d])|opus-4-\d{8}/i, input: 15, output: 75 },
+  { model: 'Opus 3', match: /3-opus/i, input: 15, output: 75 },
+  { model: 'Sonnet 5.5', match: /sonnet-5-5(?!\d)/i, input: 2, output: 10, cacheRead: 0.2 },
+  { model: 'Sonnet 5', match: /sonnet-5(?![-\d])/i, input: 2, output: 10 },
+  { model: 'Sonnet 4.6', match: /sonnet-4-6(?!\d)/i, input: 3, output: 15 },
+  // Earlier list.
+  { model: 'Sonnet 4.5', match: /sonnet-4-5(?!\d)/i, input: 3, output: 15 },
+  { model: 'Sonnet 4', match: /sonnet-4(?![-\d])|sonnet-4-\d{8}/i, input: 3, output: 15 },
+  { model: 'Sonnet 3.7', match: /3-7-sonnet/i, input: 3, output: 15 },
+  { model: 'Sonnet 3.5', match: /3-5-sonnet/i, input: 3, output: 15 },
+  // Haiku 5.5 is priced higher when a prompt is over 100K tokens.
+  { model: 'Haiku 5.5', match: /haiku-5-5(?!\d)/i, input: 0.1, output: 0.5, longContext: { above: 100_000, input: 0.5, output: 2.5 } },
+  { model: 'Haiku 4.5', match: /haiku-4-5(?!\d)/i, input: 1, output: 5 },
+  // Earlier list.
+  { model: 'Haiku 3.5', match: /3-5-haiku/i, input: 0.8, output: 4 },
+  { model: 'Haiku 3', match: /3-haiku/i, input: 0.25, output: 1.25 }
+]
+
+/** Used for a model the table does not know (a new release before this table is updated). */
+const FALLBACK: Record<ModelFamily, ModelPrice> = {
+  fable: { model: 'Fable', input: 10, output: 50 },
+  opus: { model: 'Opus', input: 4, output: 20, cacheRead: 0.2 },
+  sonnet: { model: 'Sonnet', input: 2, output: 10, cacheRead: 0.2 },
+  haiku: { model: 'Haiku', input: 0.1, output: 0.5 },
+  other: { model: 'other', input: 3, output: 15 }
 }
 
 export interface ModelInfo {
@@ -28,37 +68,30 @@ const FAMILY_NAME: Record<Exclude<ModelFamily, 'other'>, string> = { fable: 'Fab
 export function modelInfo(model: string): ModelInfo {
   // Versions have one or two digits; longer numbers are release dates.
   const m = /(fable|mythos|opus|sonnet|haiku)-(\d{1,2})(?:-(\d{1,2}))?(?!\d)/i.exec(model)
-  const old = m ? undefined : /claude-(\d)-(\d)-(opus|sonnet|haiku)/i.exec(model)
-  const name = (m?.[1] ?? old?.[3])?.toLowerCase()
+  const old = m ? undefined : /claude-(\d)-(\d)-(opus|sonnet|haiku)|claude-(\d)-(opus|sonnet|haiku)/i.exec(model)
+  const name = (m?.[1] ?? old?.[3] ?? old?.[5])?.toLowerCase()
   if (!name) return { family: 'other', label: model || '?' }
   const family = (name === 'mythos' ? 'fable' : name) as Exclude<ModelFamily, 'other'>
-  const major = Number(m ? m[2] : old![1])
+  const major = Number(m ? m[2] : (old![1] ?? old![4]))
   const minorText = m ? m[3] : old![2]
   const minor = minorText !== undefined ? Number(minorText) : undefined
   const display = name === 'mythos' ? 'Mythos' : FAMILY_NAME[family]
   return { family, major, minor, label: `${display} ${major}${minor !== undefined ? `.${minor}` : ''}` }
 }
 
-function priceFor(info: ModelInfo): Price {
-  const v = (info.major ?? 0) + (info.minor ?? 0) / 10
-  switch (info.family) {
-    case 'fable':
-      return v >= 5.1 ? { input: 10, output: 50, cacheRead: 0.25 } : { input: 10, output: 50 }
-    case 'opus':
-      if (v >= 5.5) return { input: 4, output: 20, cacheRead: 0.2 }
-      if (v >= 4.5) return { input: 5, output: 25 }
-      return { input: 15, output: 75 }
-    case 'sonnet':
-      if (v >= 5) return { input: 2, output: 10, cacheRead: 0.2 }
-      return { input: 3, output: 15 }
-    case 'haiku':
-      if (v >= 5) return { input: 0.1, output: 0.5 }
-      if (v >= 4) return { input: 1, output: 5 }
-      if (v >= 3.5) return { input: 0.8, output: 4 }
-      return { input: 0.25, output: 1.25 }
-    default:
-      return { input: 3, output: 15 }
+/** The list price of a model id. */
+export function priceOf(model: string): ModelPrice {
+  const row = ROWS.find((r) => r.match.test(model))
+  if (row) {
+    const { match: _match, ...price } = row
+    return price
   }
+  return FALLBACK[modelInfo(model).family]
+}
+
+/** Every row of the table, for showing the prices used. */
+export function priceTable(): ModelPrice[] {
+  return ROWS.map(({ match: _match, ...price }) => price)
 }
 
 export interface ReplyUsage {
@@ -70,23 +103,21 @@ export interface ReplyUsage {
 }
 
 /** Token counts of one reply, with cache writes split by lifetime (they are priced differently). */
-export function tokensOf(u: ReplyUsage): TokenTotals & { write5m: number; write1h: number } {
+export function tokensOf(u: ReplyUsage): { input: number; output: number; cacheRead: number; write5m: number; write1h: number } {
   const write1h = u.cache_creation?.ephemeral_1h_input_tokens ?? 0
   const write5m = u.cache_creation?.ephemeral_5m_input_tokens ?? Math.max(0, (u.cache_creation_input_tokens ?? 0) - write1h)
-  return {
-    input: u.input_tokens ?? 0,
-    output: u.output_tokens ?? 0,
-    cacheRead: u.cache_read_input_tokens ?? 0,
-    cacheWrite: write5m + write1h,
-    write5m,
-    write1h
-  }
+  return { input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, write5m, write1h }
 }
 
-/** US dollars at list price. Cache writes cost 1.25x input for 5 minutes and 2x for 1 hour. */
+/** US dollars at list price for one request, including a long-context tier when the prompt is over its threshold. */
 export function costOf(u: ReplyUsage, model: string): number {
-  const p = priceFor(modelInfo(model))
+  const p = priceOf(model)
   const t = tokensOf(u)
-  const read = p.cacheRead ?? p.input * 0.1
-  return (t.input * p.input + t.output * p.output + t.cacheRead * read + t.write5m * p.input * 1.25 + t.write1h * p.input * 2) / 1e6
+  const prompt = t.input + t.cacheRead + t.write5m + t.write1h
+  const long = p.longContext && prompt > p.longContext.above ? p.longContext : undefined
+  const input = long?.input ?? p.input
+  const output = long?.output ?? p.output
+  // A listed cache-read price scales with the tier like the input price does.
+  const read = p.cacheRead !== undefined ? (p.cacheRead / p.input) * input : input * 0.1
+  return (t.input * input + t.output * output + t.cacheRead * read + t.write5m * input * 1.25 + t.write1h * input * 2) / 1e6
 }
