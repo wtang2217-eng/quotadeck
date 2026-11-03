@@ -73,20 +73,30 @@ export interface UsageBucket {
   e?: 'd' | 'c'
   /** Organization the desktop app was signed in with when the replies were written. */
   g?: string
-  /** Units, replies, then tokens: input, output, cache read, cache write; then list-price cost in US dollars. */
+  /** Units and requests, then tokens: input, output, cache read, cache writes (5 min, 1 h); then list-price US dollars. */
   u: number
   n: number
   i: number
   o: number
   r: number
-  w: number
+  w5: number
+  w1: number
   c: number
   /** Time of the last reply. */
   t: number
 }
 
+export interface ScanOptions {
+  /** Desktop organization signed in at a time, for attributing desktop replies. */
+  orgAt?: OrgAt
+  /** On the very first scan, read the whole history rather than the last month (fills the ledger once). */
+  deep?: boolean
+  /** Buckets about to be dropped because they are older than a month; the ledger keeps them. */
+  onDrop?: (buckets: UsageBucket[]) => void
+}
+
 interface ScanState {
-  version: 2
+  version: 3
   cursors: Record<string, { size: number }>
   events: UsageEvent[]
   /** Reply ids already counted (one reply spans several transcript lines), with their time for pruning. */
@@ -148,8 +158,8 @@ export class UsageScanner {
 
   constructor(private readonly file = path.join(qdPaths().root, 'usage-scan.json')) {
     const saved = readJson<ScanState>(file)
-    // Version 1 kept no statistics; reading the transcripts again fills them in.
-    this.state = saved?.version === 2 ? saved : { version: 2, cursors: {}, events: [], seen: {}, buckets: {}, projects: {} }
+    // Older versions kept no statistics; reading the transcripts again fills them in.
+    this.state = saved?.version === 3 ? saved : { version: 3, cursors: {}, events: [], seen: {}, buckets: {}, projects: {} }
   }
 
   get events(): readonly UsageEvent[] {
@@ -181,21 +191,20 @@ export class UsageScanner {
     this.lastSave = Date.now()
   }
 
-  /**
-   * Read whatever was added to the transcripts since the last call. Returns true when new replies were found.
-   * `orgAt` tells which organization the desktop app was signed in with at a time, for the statistics.
-   */
-  async scan(now = Date.now(), orgAt?: OrgAt): Promise<boolean> {
+  /** Read whatever was added to the transcripts since the last call. Returns true when new replies were found. */
+  async scan(now = Date.now(), opts: ScanOptions = {}): Promise<boolean> {
     if (this.busy) return false
     this.busy = true
-    this.orgAt = orgAt
+    this.orgAt = opts.orgAt
     const before = this.state.events.length
     const revisionBefore = this.revision
     let touched = false
     try {
       const cutoff = now - STATS_KEEP
+      // The first scan may read everything; older buckets go to `onDrop` at the end of it.
+      const readFrom = opts.deep && !this.state.complete ? -Infinity : cutoff
       const live = new Set<string>()
-      for (const file of transcriptFiles(cutoff)) {
+      for (const file of transcriptFiles(readFrom)) {
         live.add(file)
         let size: number
         try {
@@ -208,7 +217,7 @@ export class UsageScanner {
         const sub = path.basename(file).startsWith('agent-')
         const session = sub ? path.basename(path.dirname(path.dirname(file))) : path.basename(file, '.jsonl')
         if (!this.state.projects[session]) this.state.projects[session] = path.basename(path.dirname(sub ? path.dirname(path.dirname(file)) : file))
-        const end = !cursor || size < cursor.size ? await this.readBackward(file, size, cutoff, session) : await this.readForward(file, cursor.size, size, cutoff, session)
+        const end = !cursor || size < cursor.size ? await this.readBackward(file, size, readFrom, session) : await this.readForward(file, cursor.size, size, readFrom, session)
         this.state.cursors[file] = { size: end }
         touched = true
         await yieldToLoop()
@@ -227,7 +236,13 @@ export class UsageScanner {
       const keepEvents = now - KEEP
       this.state.events = this.state.events.filter((e) => e.t >= keepEvents).sort((a, b) => a.t - b.t)
       for (const [id, t] of Object.entries(this.state.seen)) if (t < cutoff) delete this.state.seen[id]
-      for (const [key, b] of Object.entries(this.state.buckets)) if (b.t < cutoff) delete this.state.buckets[key]
+      const dropped: UsageBucket[] = []
+      for (const [key, b] of Object.entries(this.state.buckets)) {
+        if (b.h + HOUR > cutoff) continue
+        dropped.push(b)
+        delete this.state.buckets[key]
+      }
+      if (dropped.length) opts.onDrop?.(dropped)
       const sessions = new Set(Object.values(this.state.buckets).map((b) => b.s))
       for (const s of Object.keys(this.state.projects)) if (!sessions.has(s)) delete this.state.projects[s]
       this.dirty = true
@@ -244,14 +259,15 @@ export class UsageScanner {
     const h = Math.floor(when / HOUR) * HOUR
     const g = this.orgAt?.(when)
     const key = `${h}|${session}|${model}|${e ?? ''}|${g ?? ''}`
-    const b = (this.state.buckets[key] ??= { h, s: session, m: model, e, g, u: 0, n: 0, i: 0, o: 0, r: 0, w: 0, c: 0, t: when })
+    const b = (this.state.buckets[key] ??= { h, s: session, m: model, e, g, u: 0, n: 0, i: 0, o: 0, r: 0, w5: 0, w1: 0, c: 0, t: when })
     const tok = tokensOf(usage)
     b.u += units
     b.n++
     b.i += tok.input
     b.o += tok.output
     b.r += tok.cacheRead
-    b.w += tok.cacheWrite
+    b.w5 += tok.write5m
+    b.w1 += tok.write1h
     b.c += costOf(usage, model)
     if (when > b.t) b.t = when
     this.revision++

@@ -149,6 +149,14 @@ export class DemoBackend extends EventEmitter implements Backend {
     return demoStats(this.settings.language, query.range, query.accountId)
   }
 
+  async ledgerCsv(query: StatsQuery) {
+    const s = demoStats(this.settings.language, query.range, query.accountId)
+    const zh = this.settings.language === 'zh-CN'
+    const head = zh ? '日期,账号,模型,按 API 标价折算（美元）' : 'Date,Account,Model,At API list prices (USD)'
+    const rows = s.days.flatMap((d) => Object.entries(d.byAccount).map(([id, usd]) => `${d.day},${s.byAccount.find((a) => a.accountId === id)?.label ?? id},Opus 5.5,${usd.toFixed(2)}`))
+    return { csv: [head, ...rows].join('\r\n') + '\r\n', fileName: zh ? 'QuotaDeck 用量账本（演示）' : 'QuotaDeck usage ledger (demo)' }
+  }
+
   async getSetupStatus() {
     return { ...demoSetupStatus(this.settings.language, !this.setupDone && this.state.needsSetup), running: false }
   }

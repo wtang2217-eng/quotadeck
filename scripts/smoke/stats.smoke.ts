@@ -1,6 +1,7 @@
 // SMOKE=scripts/smoke/stats.smoke.ts npm run smoke
-// Reads this computer's transcripts and desktop usage samples (read-only) and prints the statistics and run-out
-// forecasts QuotaDeck would show. The scan cache goes to a temp folder; emails and paths are masked.
+// Builds the usage ledger from this computer's transcripts and desktop usage samples (read-only) the way the app
+// does on its first start, then prints the statistics, how many requests could not be attributed to an account and
+// why, and the run-out forecasts. The ledger and scan cache go to a temp folder; emails are masked.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -15,6 +16,7 @@ const HOUR = 3_600_000
 
 it('stats smoke', async () => {
   const { UsageScanner, attribute, estimateUsage } = await import(`${ROOT}/src/main/core/estimate`)
+  const { entriesFrom, Ledger } = await import(`${ROOT}/src/main/core/ledger`)
   const { findDesktopDataDir, readUsageSamples, listAccountFolders, readSessions } = await import(`${ROOT}/src/main/core/desktop`)
   const { computeStats } = await import(`${ROOT}/src/main/core/stats`)
   const { computeEta } = await import(`${ROOT}/src/main/core/eta`)
@@ -23,54 +25,102 @@ it('stats smoke', async () => {
 
   // The real app's account list, read only.
   const state = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.quotadeck', 'state.json'), 'utf8').replace(/^﻿/, ''))
-  const accounts: Array<{ id: string; email?: string; orgUuid?: string; usesDefaultCliDir?: boolean; plan?: { label?: string; kind?: string } }> = state.accounts
+  const accounts: Array<{ id: string; email?: string; nickname?: string; orgUuid?: string; usesDefaultCliDir?: boolean; plan?: { label?: string; kind?: string } }> = state.accounts
   const names = new Map(accounts.map((a) => [a.id, `${mask(a.email)} (${a.plan?.label ?? '?'})`]))
   const dataDir = findDesktopDataDir()
-  const samples = dataDir ? readUsageSamples(dataDir) : []
+  const samples: Array<{ t: number; org: string; fh?: number; sd?: number }> = dataDir ? readUsageSamples(dataDir) : []
   const orgAt = (t: number) => {
     let found: string | undefined
     for (const s of samples) if (s.t <= t) found = s.org
     return found
   }
-  const scanner = new UsageScanner(path.join(process.env.QUOTADECK_HOME!, 'scan.json'))
-  let t = Date.now()
-  await scanner.scan(Date.now(), orgAt)
-  console.log('first scan (31 days) ms', Date.now() - t, 'buckets', Object.keys(scanner.buckets).length, 'events (7d)', scanner.events.length, 'complete', scanner.complete)
-
   const folders = dataDir ? listAccountFolders(dataDir) : []
   const desktopSessions = new Set<string>()
   for (const f of folders) for (const s of readSessions(f)) if (s.cliSessionId) desktopSessions.add(s.cliSessionId)
   const orgToAccount = new Map(accounts.filter((a) => a.orgUuid).map((a) => [a.orgUuid!, a.id]))
   const def = accounts.find((a) => a.usesDefaultCliDir)?.id ?? ''
+  const why = new Map<string, { requests: number; usd: number }>()
+  const count = (k: string, n: number, c: number) => {
+    const v = why.get(k) ?? { requests: 0, usd: 0 }
+    v.requests += n
+    v.usd += c
+    why.set(k, v)
+  }
   const accountOf = (b: { s: string; e?: string; g?: string }) => {
     const known = state.sessionAccounts?.[b.s]?.accountId
     if (known) return known
     const desktop = b.e === 'd' || (b.e === undefined && desktopSessions.has(b.s))
-    return desktop ? ((b.g && orgToAccount.get(b.g)) || '') : def
+    if (!desktop) return def
+    return (b.g && orgToAccount.get(b.g)) || ''
   }
+  // Same fallback as the engine: requests older than the desktop samples take the organization of the desktop
+  // list the conversation was started in (a list QuotaDeck did not copy it into).
+  const { normalize } = await import(`${ROOT}/src/main/core/paths`)
+  const copies = new Set(Object.values((state.manifest?.entries ?? {}) as Record<string, { dest: string }>).map((e) => normalize(e.dest)))
+  const original = new Map<string, string>()
+  for (const f of folders) for (const s of readSessions(f)) if (s.cliSessionId && !original.has(s.cliSessionId) && !copies.has(normalize(s.file))) original.set(s.cliSessionId, f.orgUuid)
+  const withOrgs = (bs: Array<{ s: string; e?: string; g?: string }>) => bs.map((b) => (b.g || b.e === 'c' || !original.has(b.s) ? b : { ...b, g: original.get(b.s) }))
+  const fallback = process.env.NO_FALLBACK !== '1'
+  const prep = (bs: Array<{ s: string; e?: string; g?: string }>) => (fallback ? withOrgs(bs) : bs)
+  const ledger = new Ledger(path.join(process.env.QUOTADECK_HOME!, 'ledger'))
+  const scanner = new UsageScanner(path.join(process.env.QUOTADECK_HOME!, 'scan.json'))
+  let t = Date.now()
+  await scanner.scan(Date.now(), { orgAt, deep: true, onDrop: (old: Array<{ s: string; e?: string; g?: string }>) => ledger.sync(entriesFrom(prep(old), accountOf), Date.now(), false) })
+  ledger.sync(entriesFrom(prep(Object.values(scanner.buckets)), accountOf), Date.now(), true)
+  console.log('original-list fallback', fallback ? 'on' : 'off', '| conversations with an original list', original.size)
+  ledger.save(true)
+  const files = fs.readdirSync(ledger.dir).map((f) => `${f} ${Math.round(fs.statSync(path.join(ledger.dir, f)).size / 1024)}KB`)
+  console.log('first scan, whole history, ms', Date.now() - t, '| ledger rows', ledger.size, '| files', files.join(', '))
+
+  // Attribution: every deduplicated request in the ledger, and why some have no account.
+  let requests = 0
+  let usd = 0
+  for (const e of ledger.entries()) {
+    requests += e.n
+    usd += e.c
+    if (e.a) continue
+    if (!e.g) count('desktop request older than the desktop samples, in a conversation with no original desktop list (organization unknown)', e.n, e.c)
+    else count(`desktop request under an organization that is not in the panel (${e.g.slice(0, 8)}…)`, e.n, e.c)
+  }
+  // The same split for the recent ranges, where the desktop samples cover everything.
+  for (const days of [7, 30]) {
+    let n = 0
+    let u = 0
+    for (const e of ledger.entries(Date.now() - days * 24 * HOUR)) {
+      n += e.n
+      if (!e.a) u += e.n
+    }
+    console.log(`last ${days} days: ${u} of ${n} requests unattributed`)
+  }
+  const un = [...why.values()].reduce((s, v) => s + v.requests, 0)
+  const unUsd = [...why.values()].reduce((s, v) => s + v.usd, 0)
+  console.log(`\nattribution: ${un} of ${requests} requests (${((un / requests) * 100).toFixed(1)}%) could not be attributed; $${unUsd.toFixed(2)} of $${usd.toFixed(2)}`)
+  console.log('  denominator = every API request (message id + request id, counted once) in all local transcripts, subagents included')
+  for (const [k, v] of why) console.log(`  ${v.requests} requests, $${v.usd.toFixed(2)}: ${k}`)
+
   const metas = new Map(listTranscripts().map((m: { cliSessionId: string }) => [m.cliSessionId, m]))
-  for (const range of ['7d', '30d'] as const) {
+  const ctx = {
+    accountId: 'all',
+    now: Date.now(),
+    timeZone: 'Asia/Shanghai',
+    partial: false,
+    note: '按 API 标价折算，仅供参考，订阅不按这个扣费',
+    accountOf: (e: { a: string; g?: string }) => e.a || (e.g ? (orgToAccount.get(e.g) ?? '') : ''),
+    accountLabel: (id: string) => ({ label: id ? (names.get(id) ?? id.slice(0, 8)) : '不在面板里的号' }),
+    session: (id: string) => {
+      const m = metas.get(id) as { title?: string; cwd?: string; projectDir?: string } | undefined
+      return { title: m?.title, cwd: m?.cwd, projectDir: m?.projectDir ?? scanner.projectOf(id) }
+    }
+  }
+  for (const range of ['today', '7d', '30d', '90d', 'all'] as const) {
     t = Date.now()
-    const s = computeStats(Object.values(scanner.buckets), {
-      range,
-      now: Date.now(),
-      timeZone: 'Asia/Shanghai',
-      partial: false,
-      accountOf,
-      session: (id: string) => {
-        const m = metas.get(id) as { title?: string; cwd?: string; projectDir?: string } | undefined
-        return { title: m?.title, cwd: m?.cwd, projectDir: m?.projectDir ?? scanner.projectOf(id) }
-      }
-    })
-    console.log(`\n== ${range} (computed in ${Date.now() - t} ms)`)
-    console.log('totals', JSON.stringify({ ...s.totals, tokens: undefined }), 'tokens', JSON.stringify(s.totals.tokens))
-    console.log('days', s.days.map((d: { day: string; units: number; costUsd: number }) => `${d.day.slice(5)} ${d.units}u $${d.costUsd}`).join(' | '))
-    console.log('models', s.models.map((m: { label: string; units: number; costUsd: number; replies: number }) => `${m.label} ${m.units}u $${m.costUsd} ${m.replies}r`).join(' | '))
-    console.log('projects', s.projects.slice(0, 5).map((p: { name: string; units: number; conversations: number }) => `${p.name} ${p.units}u ${p.conversations}c`).join(' | '))
-    console.log('top', s.topConversations.slice(0, 3).map((c: { title: string; units: number; costUsd: number }) => `${c.title.slice(0, 16)} ${c.units}u $${c.costUsd}`).join(' | '))
-    console.log('byAccount', s.byAccount.map((a: { accountId: string; units: number; costUsd: number }) => `${names.get(a.accountId) ?? (a.accountId ? 'other' : 'unattributed')} ${a.units}u $${a.costUsd}`).join(' | '))
-    const peak = s.heatmap.flatMap((row: number[], wd: number) => row.map((u: number, h: number) => ({ wd, h, u }))).sort((a: { u: number }, b: { u: number }) => b.u - a.u)[0]
-    console.log('busiest hour', peak)
+    const s = computeStats(ledger.entries(), { ...ctx, range })
+    console.log(`\n== ${range} (${Date.now() - t} ms, ${s.days.length} days from ${s.days[0]?.day})`)
+    console.log('totals', JSON.stringify({ usd: s.totals.costUsd, requests: s.totals.requests, conversations: s.totals.conversations, activeDays: s.totals.activeDays }), 'tokens', JSON.stringify(s.totals.tokens))
+    console.log('fixed', JSON.stringify(s.fixed), 'firstDay', s.firstDay)
+    console.log('models', s.models.map((m: { label: string; costUsd: number; requests: number }) => `${m.label} $${m.costUsd} ${m.requests}req`).join(' | '))
+    console.log('byAccount', s.byAccount.map((a: { label: string; costUsd: number; requests: number }) => `${a.label} $${a.costUsd} ${a.requests}req`).join(' | '))
+    if (range === 'today') console.log('hours', s.hours?.filter((h: { costUsd: number }) => h.costUsd > 0).map((h: { hour: number; costUsd: number }) => `${h.hour}h $${h.costUsd}`).join(' '))
   }
 
   // Run-out forecast per account, the way the engine computes it.
@@ -80,20 +130,11 @@ it('stats smoke', async () => {
   const est = estimateUsage(accounts.map((a) => ({ id: a.id, orgUuid: a.orgUuid, weight: planWeight(a.plan) })), samples, events, now, rates)
   for (const a of accounts) {
     const e = est.get(a.id)
-    const own = samples.filter((s: { org: string; t: number }) => s.org === a.orgUuid && s.t > now - 24 * HOUR)
+    const own = samples.filter((s) => s.org === a.orgUuid && s.t > now - 24 * HOUR)
     const recent = events.filter((x: { account?: string; t: number }) => x.account === a.id && x.t > now - 3 * HOUR)
     const last = own[own.length - 1]
-    const eta = computeEta({
-      now,
-      fiveHour: e?.fiveHour ?? last?.fh,
-      sevenDay: e?.sevenDay ?? last?.sd,
-      fiveHourResetsAt: e?.fiveHourResetsAt,
-      points: own.map((s: { t: number; fh?: number; sd?: number }) => ({ t: s.t, fh: s.fh, sd: s.sd })),
-      rate: rates.get(a.id),
-      events: recent
-    })
+    const eta = computeEta({ now, fiveHour: e?.fiveHour ?? last?.fh, sevenDay: e?.sevenDay ?? last?.sd, fiveHourResetsAt: e?.fiveHourResetsAt, points: own, rate: rates.get(a.id), events: recent })
     console.log('\naccount', names.get(a.id), '| estimate', JSON.stringify(e && { fh: e.fiveHour, sd: e.sevenDay, resets: e.fiveHourResetsAt && new Date(e.fiveHourResetsAt).toISOString() }))
-    console.log('   rate', JSON.stringify(rates.get(a.id)), 'recent replies (3h)', recent.length, 'last record', last && `${Math.round((now - last.t) / 60000)} min ago fh=${last.fh} sd=${last.sd}`)
     console.log('   eta', JSON.stringify(eta && { ...eta, fiveHourFullAt: eta.fiveHourFullAt && new Date(eta.fiveHourFullAt).toISOString(), sevenDayFullAt: eta.sevenDayFullAt && new Date(eta.sevenDayFullAt).toISOString() }))
   }
-}, 300_000)
+}, 600_000)

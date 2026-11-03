@@ -1,11 +1,11 @@
-// The statistics page: the scanner's hourly buckets summed per day, model, project, conversation and account,
-// with days and hours in the time zone the user chose.
+// The statistics page and the CSV export: the ledger summed per day, hour, model, project, conversation and
+// account, with days and hours in the time zone the user chose.
 
 import path from 'node:path'
 import { resolveTimeZone } from '@shared/format'
-import type { StatsConversation, StatsModel, StatsProject, StatsRange, TokenTotals, UsageStats } from '@shared/types'
-import type { UsageBucket } from './estimate'
-import { modelInfo, PRICE_LIST_DATE } from './pricing'
+import type { StatsAccount, StatsConversation, StatsModel, StatsProject, StatsRange, TokenTotals, UsageStats } from '@shared/types'
+import type { LedgerEntry } from './ledger'
+import { modelInfo, priceOf, PRICE_LIST_DATE } from './pricing'
 
 const HOUR = 3_600_000
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -19,42 +19,39 @@ export interface SessionInfo {
 
 export interface StatsContext {
   range: StatsRange
-  accountId?: string
+  /** One account id, or "all". */
+  accountId: string
   now: number
   /** IANA zone, or "system". */
   timeZone: string
-  /** Account a bucket's replies belong to ("" when unknown). */
-  accountOf: (b: UsageBucket) => string
+  /** Account an entry belongs to ("" when unknown). */
+  accountOf: (e: LedgerEntry) => string
+  accountLabel: (id: string) => { label: string; email?: string }
   session: (id: string) => SessionInfo
   partial: boolean
+  /** The "list prices, for reference only" sentence in the UI language. */
+  note: string
 }
 
 interface LocalTime {
   day: string
+  month: string
   hour: number
   /** 0 = Monday. */
   weekday: number
 }
 
-/** Calendar day, hour and weekday of a time in a zone; memoized per hour because buckets are hourly. */
+/** Calendar day, hour and weekday of a time in a zone; memoized because entries are hourly. */
 export function zonedClock(timeZone: string | undefined): (t: number) => LocalTime {
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    hourCycle: 'h23',
-    weekday: 'short'
-  })
+  const fmt = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23', weekday: 'short' })
   const memo = new Map<number, LocalTime>()
   return (t: number) => {
     const hit = memo.get(t)
     if (hit) return hit
     const p: Record<string, string> = {}
     for (const part of fmt.formatToParts(t)) p[part.type] = part.value
-    const v = { day: `${p.year}-${p.month}-${p.day}`, hour: Number(p.hour) % 24, weekday: Math.max(0, WEEKDAYS.indexOf(p.weekday)) }
-    if (memo.size < 5000) memo.set(t, v)
+    const v = { day: `${p.year}-${p.month}-${p.day}`, month: `${p.year}-${p.month}`, hour: Number(p.hour) % 24, weekday: Math.max(0, WEEKDAYS.indexOf(p.weekday)) }
+    if (memo.size < 100_000) memo.set(t, v)
     return v
   }
 }
@@ -68,82 +65,121 @@ function zoneOffset(t: number, timeZone: string | undefined): number {
   return asUtc - Math.floor(t / 1000) * 1000
 }
 
-const zero = (): TokenTotals => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 })
-const add = (t: TokenTotals, b: UsageBucket) => {
-  t.input += b.i
-  t.output += b.o
-  t.cacheRead += b.r
-  t.cacheWrite += b.w
+/** Calendar days from `first` to `last` (both YYYY-MM-DD), inclusive. */
+function dayRange(first: string, last: string): string[] {
+  const [y, m, d] = first.split('-').map(Number)
+  const out: string[] = []
+  for (let k = 0; out.length < 20_000; k++) {
+    const dt = new Date(Date.UTC(y, m - 1, d + k))
+    const day = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`
+    out.push(day)
+    if (day >= last) break
+  }
+  return out
+}
+
+function shiftDay(day: string, by: number): string {
+  const [y, m, d] = day.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d + by))
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`
+}
+
+export const zeroTokens = (): TokenTotals => ({ input: 0, output: 0, cacheWrite5m: 0, cacheWrite1h: 0, cacheRead: 0 })
+export function addTokens(t: TokenTotals, e: Pick<LedgerEntry, 'i' | 'o' | 'w5' | 'w1' | 'r'>): void {
+  t.input += e.i
+  t.output += e.o
+  t.cacheWrite5m += e.w5
+  t.cacheWrite1h += e.w1
+  t.cacheRead += e.r
 }
 const r1 = (n: number) => Math.round(n * 10) / 10
 const r2 = (n: number) => Math.round(n * 100) / 100
 
-export function computeStats(buckets: Iterable<UsageBucket>, ctx: StatsContext): UsageStats {
+interface Acc {
+  tokens: TokenTotals
+  costUsd: number
+  requests: number
+  units: number
+}
+const acc = (): Acc => ({ tokens: zeroTokens(), costUsd: 0, requests: 0, units: 0 })
+const add = (x: Acc, e: LedgerEntry) => {
+  addTokens(x.tokens, e)
+  x.costUsd += e.c
+  x.requests += e.n
+  x.units += e.u
+}
+const done = <T extends Acc>(x: T): T => ({ ...x, costUsd: r2(x.costUsd), units: r1(x.units) })
+
+export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext): UsageStats {
   const tz = resolveTimeZone(ctx.timeZone)
   const clock = zonedClock(tz)
-  const n = ctx.range === '30d' ? 30 : 7
+  const all = ctx.accountId === 'all' || !ctx.accountId
+  const nowLocal = clock(ctx.now)
+  const today = nowLocal.day
 
-  // The days of the range, as calendar dates in the zone, oldest first.
-  const today = clock(ctx.now).day
-  const [y, m, d] = today.split('-').map(Number)
-  const dayList: string[] = []
-  for (let k = n - 1; k >= 0; k--) {
-    const dt = new Date(Date.UTC(y, m - 1, d - k))
-    dayList.push(`${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`)
+  // Entries of the chosen account, and the first day anything was recorded.
+  const mine: LedgerEntry[] = []
+  let firstDay: string | undefined
+  const fixed = { todayUsd: 0, monthUsd: 0, allTimeUsd: 0 }
+  for (const e of entries) {
+    const a = ctx.accountOf(e)
+    if (!all && a !== ctx.accountId) continue
+    mine.push(e)
+    const local = clock(e.h)
+    if (!firstDay || local.day < firstDay) firstDay = local.day
+    fixed.allTimeUsd += e.c
+    if (local.month === nowLocal.month) fixed.monthUsd += e.c
+    if (local.day === today) fixed.todayUsd += e.c
   }
-  const dayIndex = new Map(dayList.map((day, i) => [day, i]))
+
+  const span = ctx.range === 'today' ? 1 : ctx.range === '7d' ? 7 : ctx.range === '30d' ? 30 : ctx.range === '90d' ? 90 : undefined
+  const firstShown = span ? shiftDay(today, -(span - 1)) : (firstDay && firstDay < today ? firstDay : today)
+  const dayList = dayRange(firstShown, today)
+  const dayIndex = new Map(dayList.map((d, i) => [d, i]))
   const [fy, fm, fd] = dayList[0].split('-').map(Number)
   const from = Date.UTC(fy, fm - 1, fd) - zoneOffset(ctx.now, tz)
 
-  const days = dayList.map((day) => ({ day, tokens: zero(), units: 0, costUsd: 0, replies: 0, byAccount: {} as Record<string, number> }))
-  const totals = { tokens: zero(), units: 0, costUsd: 0, replies: 0, conversations: 0, activeDays: 0 }
+  const days = dayList.map((day) => ({ day, ...acc(), byAccount: {} as Record<string, number> }))
+  const hours = ctx.range === 'today' ? Array.from({ length: 24 }, (_, hour) => ({ hour, tokens: zeroTokens(), costUsd: 0, requests: 0 })) : undefined
+  const totals = acc()
   const heatmap = Array.from({ length: 7 }, () => new Array<number>(24).fill(0))
   const models = new Map<string, StatsModel>()
-  const sessions = new Map<string, { tokens: TokenTotals; units: number; costUsd: number; replies: number; last: number; accounts: Map<string, number> }>()
-  const accounts = new Map<string, { units: number; costUsd: number; replies: number }>()
+  const sessions = new Map<string, Acc & { last: number; accounts: Map<string, number> }>()
+  const accounts = new Map<string, Acc & { sessions: Set<string> }>()
 
-  for (const b of buckets) {
-    if (b.h < from - 2 * HOUR) continue
-    const local = clock(b.h)
+  for (const e of mine) {
+    if (e.h < from - 2 * HOUR) continue
+    const local = clock(e.h)
     const di = dayIndex.get(local.day)
     if (di === undefined) continue
-    const acct = ctx.accountOf(b)
-    if (ctx.accountId && acct !== ctx.accountId) continue
-
+    const a = ctx.accountOf(e)
     const day = days[di]
-    add(day.tokens, b)
-    day.units += b.u
-    day.costUsd += b.c
-    day.replies += b.n
-    day.byAccount[acct] = (day.byAccount[acct] ?? 0) + b.u
-    add(totals.tokens, b)
-    totals.units += b.u
-    totals.costUsd += b.c
-    totals.replies += b.n
-    heatmap[local.weekday][local.hour] += b.u
+    add(day, e)
+    day.byAccount[a] = (day.byAccount[a] ?? 0) + e.c
+    if (hours && local.day === today) {
+      const h = hours[local.hour]
+      addTokens(h.tokens, e)
+      h.costUsd += e.c
+      h.requests += e.n
+    }
+    add(totals, e)
+    heatmap[local.weekday][local.hour] += e.c
 
-    const info = modelInfo(b.m)
-    const mm = models.get(info.label) ?? { model: b.m, label: info.label, family: info.family, tokens: zero(), units: 0, costUsd: 0, replies: 0 }
-    add(mm.tokens, b)
-    mm.units += b.u
-    mm.costUsd += b.c
-    mm.replies += b.n
+    const info = modelInfo(e.m)
+    const mm = models.get(info.label) ?? { model: e.m, label: info.label, family: info.family, ...acc(), price: priceOf(e.m) }
+    add(mm, e)
     models.set(info.label, mm)
 
-    const s = sessions.get(b.s) ?? { tokens: zero(), units: 0, costUsd: 0, replies: 0, last: 0, accounts: new Map<string, number>() }
-    add(s.tokens, b)
-    s.units += b.u
-    s.costUsd += b.c
-    s.replies += b.n
-    s.last = Math.max(s.last, b.t)
-    s.accounts.set(acct, (s.accounts.get(acct) ?? 0) + b.u)
-    sessions.set(b.s, s)
+    const s = sessions.get(e.s) ?? { ...acc(), last: 0, accounts: new Map<string, number>() }
+    add(s, e)
+    s.last = Math.max(s.last, e.t)
+    s.accounts.set(a, (s.accounts.get(a) ?? 0) + e.c)
+    sessions.set(e.s, s)
 
-    const a = accounts.get(acct) ?? { units: 0, costUsd: 0, replies: 0 }
-    a.units += b.u
-    a.costUsd += b.c
-    a.replies += b.n
-    accounts.set(acct, a)
+    const ac = accounts.get(a) ?? { ...acc(), sessions: new Set<string>() }
+    add(ac, e)
+    ac.sessions.add(e.s)
+    accounts.set(a, ac)
   }
 
   const projects = new Map<string, StatsProject>()
@@ -151,56 +187,84 @@ export function computeStats(buckets: Iterable<UsageBucket>, ctx: StatsContext):
   for (const [id, s] of sessions) {
     const info = ctx.session(id)
     const projectDir = info.projectDir ?? ''
-    const key = (info.cwd ?? projectDir).toLowerCase()
+    const key = (info.cwd ?? projectDir).replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase()
     const name = info.cwd ? path.basename(info.cwd.replace(/[\\/]+$/, '')) || info.cwd : projectDir || '?'
-    const p = projects.get(key) ?? { cwd: info.cwd, projectDir, name, units: 0, costUsd: 0, replies: 0, conversations: 0 }
-    p.units += s.units
+    const p = projects.get(key) ?? { cwd: info.cwd, projectDir, name, ...acc(), conversations: 0 }
+    addTokens(p.tokens, { i: s.tokens.input, o: s.tokens.output, w5: s.tokens.cacheWrite5m, w1: s.tokens.cacheWrite1h, r: s.tokens.cacheRead })
     p.costUsd += s.costUsd
-    p.replies += s.replies
+    p.requests += s.requests
+    p.units += s.units
     p.conversations++
     projects.set(key, p)
-    const mainAccount = [...s.accounts].sort((x, y) => y[1] - x[1])[0]?.[0]
+    const main = [...s.accounts].sort((x, y) => y[1] - x[1])[0]?.[0]
     top.push({
       cliSessionId: id,
       title: info.title || id.slice(0, 8),
       cwd: info.cwd,
-      accountId: mainAccount || undefined,
+      accountId: main || undefined,
       tokens: s.tokens,
-      units: r1(s.units),
       costUsd: r2(s.costUsd),
-      replies: s.replies,
+      requests: s.requests,
+      units: r1(s.units),
       lastActivityAt: Math.max(s.last, info.lastActivityAt ?? 0)
     })
   }
 
-  totals.conversations = sessions.size
-  totals.activeDays = days.filter((x) => x.replies > 0).length
-  for (const day of days) {
-    day.units = r1(day.units)
-    day.costUsd = r2(day.costUsd)
-    for (const k of Object.keys(day.byAccount)) day.byAccount[k] = r1(day.byAccount[k])
-  }
-  totals.units = r1(totals.units)
-  totals.costUsd = r2(totals.costUsd)
+  const byAccount: StatsAccount[] = [...accounts]
+    .map(([accountId, v]) => ({ accountId, ...ctx.accountLabel(accountId), tokens: v.tokens, costUsd: r2(v.costUsd), requests: v.requests, units: r1(v.units), conversations: v.sessions.size }))
+    .sort((x, y) => y.costUsd - x.costUsd)
 
   return {
     range: ctx.range,
-    accountId: ctx.accountId,
+    accountId: all ? 'all' : ctx.accountId,
     from,
     to: ctx.now,
     timeZone: tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
-    totals,
-    days,
-    models: [...models.values()].map((x) => ({ ...x, units: r1(x.units), costUsd: r2(x.costUsd) })).sort((a, b) => b.units - a.units),
-    projects: [...projects.values()]
-      .map((x) => ({ ...x, units: r1(x.units), costUsd: r2(x.costUsd) }))
-      .sort((a, b) => b.units - a.units)
-      .slice(0, 12),
-    heatmap: heatmap.map((row) => row.map(r1)),
-    topConversations: top.sort((a, b) => b.units - a.units).slice(0, 10),
-    byAccount: [...accounts].map(([accountId, v]) => ({ accountId, units: r1(v.units), costUsd: r2(v.costUsd), replies: v.replies })).sort((a, b) => b.units - a.units),
-    pricing: { asOf: PRICE_LIST_DATE, currency: 'USD' },
+    firstDay,
+    totals: { ...done(totals), conversations: sessions.size, activeDays: days.filter((d) => d.requests > 0).length },
+    fixed: { todayUsd: r2(fixed.todayUsd), monthUsd: r2(fixed.monthUsd), allTimeUsd: r2(fixed.allTimeUsd) },
+    days: days.map((d) => ({ ...done(d), byAccount: Object.fromEntries(Object.entries(d.byAccount).map(([k, v]) => [k, r2(v)])) })),
+    hours: hours?.map((h) => ({ ...h, costUsd: r2(h.costUsd) })),
+    models: [...models.values()].map(done).sort((x, y) => y.costUsd - x.costUsd),
+    projects: [...projects.values()].map(done).sort((x, y) => y.costUsd - x.costUsd).slice(0, 12),
+    heatmap: heatmap.map((row) => row.map(r2)),
+    topConversations: top.sort((x, y) => y.costUsd - x.costUsd).slice(0, 10),
+    byAccount,
+    pricing: { asOf: PRICE_LIST_DATE, currency: 'USD', note: ctx.note },
     partial: ctx.partial,
     computedAt: ctx.now
   }
+}
+
+const csvCell = (v: string | number) => {
+  const s = String(v)
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+/** One row per day × account × model of the range, oldest first; days in the chosen zone. */
+export function ledgerCsv(entries: Iterable<LedgerEntry>, ctx: Omit<StatsContext, 'session' | 'partial' | 'note'>, header: string[]): string {
+  const stats = computeStats([], { ...ctx, session: () => ({}), partial: false, note: '' })
+  const firstShown = stats.days[0]?.day ?? ''
+  const tz = resolveTimeZone(ctx.timeZone)
+  const clock = zonedClock(tz)
+  const all = ctx.accountId === 'all' || !ctx.accountId
+  const rows = new Map<string, { day: string; account: string; model: string; v: Acc }>()
+  for (const e of entries) {
+    const a = ctx.accountOf(e)
+    if (!all && a !== ctx.accountId) continue
+    const day = clock(e.h).day
+    if (ctx.range !== 'all' && day < firstShown) continue
+    const model = modelInfo(e.m).label
+    const k = `${day}|${a}|${model}`
+    const row = rows.get(k) ?? { day, account: a, model, v: acc() }
+    add(row.v, e)
+    rows.set(k, row)
+  }
+  const lines = [header.map(csvCell).join(',')]
+  for (const r of [...rows.values()].sort((x, y) => x.day.localeCompare(y.day) || x.account.localeCompare(y.account) || x.model.localeCompare(y.model))) {
+    const who = ctx.accountLabel(r.account)
+    const t = r.v.tokens
+    lines.push([r.day, who.label, who.email ?? '', r.model, t.input, t.output, t.cacheWrite5m, t.cacheWrite1h, t.cacheRead, r.v.requests, r2(r.v.costUsd).toFixed(2)].map(csvCell).join(','))
+  }
+  return lines.join('\r\n') + '\r\n'
 }

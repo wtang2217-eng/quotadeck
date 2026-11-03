@@ -40,6 +40,7 @@ const api: QuotaDeckApi = {
   exportConversation: (cliSessionId) => invoke(IPC.exportConversation, cliSessionId),
 
   getStats: (query) => invoke(IPC.getStats, query),
+  exportLedgerCsv: (query) => invoke(IPC.exportLedgerCsv, query),
 
   getSetupStatus: () => invoke(IPC.getSetupStatus),
   runSetup: (opts) => invoke(IPC.runSetup, opts),

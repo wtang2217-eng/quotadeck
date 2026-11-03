@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type http from 'node:http'
 import { DEFAULT_CONTINUE_PROMPT } from '@shared/defaults'
-import { DEFAULT_COLORS, accountName, formatClock, peakPct } from '@shared/format'
+import { DEFAULT_COLORS, accountName, formatClock, peakPct, resolveTimeZone } from '@shared/format'
 import type {
   Account,
   AccountView,
@@ -48,16 +48,17 @@ import { computeEta } from './eta'
 import { attribute, estimateUsage, UsageScanner, type UsageBucket } from './estimate'
 import { safeFileName, transcriptToMarkdown } from './exportMd'
 import { listTranscripts, saveHistoryCache, type TranscriptMeta } from './history'
+import { entriesFrom, Ledger, type LedgerEntry } from './ledger'
 import * as integration from './integration'
 import { launchInTerminal } from './launcher'
 import { isUsageLimitMessage, parseLimitMessage } from './limits'
 import { mergeDesktopSessions, undoMerge } from './merge'
-import { exists, HOME, isInside, mainClaudeDir, mtime, qdPaths, samePath } from './paths'
+import { exists, HOME, isInside, mainClaudeDir, mtime, normalize, qdPaths, samePath } from './paths'
 import { planFrom, planWeight } from './plan'
 import { createProfile, newProfileDir, repairLinks } from './profiles'
 import { startServer, type RunningServer } from './server'
 import { buildChecks, desktopAppInstalled, installClaudeCode, isReady, type CommandRunner } from './setup'
-import { computeStats } from './stats'
+import { computeStats, ledgerCsv } from './stats'
 import { renderStatusLine } from './statusline'
 import { loadState, saveStateNow, saveStateSoon, type PersistedState } from './store'
 import { compareVersions, fetchLatestRelease } from './updates'
@@ -118,6 +119,8 @@ export class Engine extends EventEmitter {
   private emitTimer?: NodeJS.Timeout
   private view?: AppState
   private scanner = new UsageScanner()
+  /** Every request ever seen, per hour, account, conversation and model (~/.quotadeck/ledger). */
+  private ledger = new Ledger()
   private estimates = new Map<string, UsageEstimate>()
   /** Percent per unit each account's estimate uses, and its replies of the last hours (for the forecast). */
   private rates = new Map<string, { fh?: number; sd?: number }>()
@@ -165,6 +168,7 @@ export class Engine extends EventEmitter {
     await this.server?.close()
     saveHistoryCache()
     this.scanner.save()
+    this.ledger.save(true)
     saveStateNow(this.s)
   }
 
@@ -252,7 +256,9 @@ export class Engine extends EventEmitter {
 
   private async computeEstimates(): Promise<void> {
     try {
-      await this.scanner.scan(Date.now(), this.orgAt)
+      // The first scan reads the whole history so the ledger starts complete; buckets that age out go to it.
+      await this.scanner.scan(Date.now(), { orgAt: this.orgAt, deep: true, onDrop: (old) => this.ledger.sync(entriesFrom(this.withOrgs(old), this.bucketAccounts()), Date.now(), false) })
+      if (this.scanner.complete) this.syncLedger()
       const desktopSessions = this.desktopSessionIds()
       const orgToAccount = new Map<string, string>()
       for (const a of this.s.accounts) if (a.orgUuid) orgToAccount.set(a.orgUuid, a.id)
@@ -1199,23 +1205,73 @@ export class Engine extends EventEmitter {
 
   private sessionAccountsCache?: { revision: number; at: number; map: Map<string, string[]> }
 
-  /** For each conversation, the accounts that ran replies in it (last 31 days), most used first. */
+  /** For each conversation, the accounts that ran requests in it (whole ledger), most used first. */
   private accountsBySession(): Map<string, string[]> {
     const c = this.sessionAccountsCache
-    if (c && c.revision === this.scanner.revision && Date.now() - c.at < MIN) return c.map
-    const of = this.bucketAccounts()
+    if (c && c.revision === this.ledger.revision && Date.now() - c.at < MIN) return c.map
+    const of = this.ledgerAccounts()
     const units = new Map<string, Map<string, number>>()
-    for (const b of Object.values(this.scanner.buckets)) {
-      const acct = of(b)
+    for (const e of this.ledger.entries()) {
+      const acct = of(e)
       if (!acct) continue
-      const m = units.get(b.s) ?? new Map<string, number>()
-      m.set(acct, (m.get(acct) ?? 0) + b.u)
-      units.set(b.s, m)
+      const m = units.get(e.s) ?? new Map<string, number>()
+      m.set(acct, (m.get(acct) ?? 0) + e.c)
+      units.set(e.s, m)
     }
     const map = new Map<string, string[]>()
     for (const [s, m] of units) map.set(s, [...m].sort((x, y) => y[1] - x[1]).map(([id]) => id))
-    this.sessionAccountsCache = { revision: this.scanner.revision, at: Date.now(), map }
+    this.sessionAccountsCache = { revision: this.ledger.revision, at: Date.now(), map }
     return map
+  }
+
+  /** Account of a ledger entry: as recorded, or claimed later by an account added since (through its organization). */
+  private ledgerAccounts(): (e: LedgerEntry) => string {
+    const orgToAccount = new Map<string, string>()
+    for (const a of this.s.accounts) if (a.orgUuid) orgToAccount.set(a.orgUuid, a.id)
+    return (e) => e.a || (e.g ? (orgToAccount.get(e.g) ?? '') : '')
+  }
+
+  private lastLedgerMetaAt = 0
+
+  /**
+   * Organization each desktop conversation was started under: the desktop list holding it that QuotaDeck did not
+   * copy it into. Used for requests older than the desktop app's usage samples (about 30 days), from before any
+   * merging, when a conversation stayed with the account it was started on.
+   */
+  private originalOrgs(): Map<string, string> {
+    const copies = new Set(Object.values(this.s.manifest.entries).map((e) => normalize(e.dest)))
+    const map = new Map<string, string>()
+    for (const f of this.folders) {
+      for (const s of readSessions(f)) if (s.cliSessionId && !map.has(s.cliSessionId) && !copies.has(normalize(s.file))) map.set(s.cliSessionId, f.orgUuid)
+    }
+    return map
+  }
+
+  /** Scanner buckets with the organization filled in where the desktop samples did not reach. */
+  private withOrgs(buckets: Iterable<UsageBucket>): UsageBucket[] {
+    const orgs = this.originalOrgs()
+    const out: UsageBucket[] = []
+    for (const b of buckets) out.push(b.g || b.e === 'c' || !orgs.has(b.s) ? b : { ...b, g: orgs.get(b.s) })
+    return out
+  }
+
+  /** Mirror the scanner's month of buckets into the ledger, and keep account names and conversation titles. */
+  private syncLedger(): void {
+    const changed = this.ledger.sync(entriesFrom(this.withOrgs(Object.values(this.scanner.buckets)), this.bucketAccounts()), Date.now(), true)
+    for (const a of this.s.accounts) this.ledger.setAccount(a.id, { email: a.email, nickname: a.nickname, plan: a.plan?.label })
+    if (changed || Date.now() - this.lastLedgerMetaAt > 10 * MIN) {
+      this.lastLedgerMetaAt = Date.now()
+      const titles = new Map<string, { title?: string; cwd?: string }>()
+      for (const f of this.folders) for (const s of readSessions(f)) if (s.cliSessionId && !titles.has(s.cliSessionId)) titles.set(s.cliSessionId, { title: s.title, cwd: s.cwd })
+      const metas = new Map(listTranscripts().map((t) => [t.cliSessionId, t]))
+      const sessions = new Set(Object.values(this.scanner.buckets).map((b) => b.s))
+      for (const id of sessions) {
+        const t = metas.get(id)
+        const d = titles.get(id)
+        this.ledger.setSession(id, { title: d?.title ?? t?.title ?? t?.firstPrompt, cwd: t?.cwd ?? d?.cwd, projectDir: t?.projectDir ?? this.scanner.projectOf(id) })
+      }
+    }
+    this.ledger.save()
   }
 
   listConversations(query: ConversationQuery = {}): ConversationItem[] {
@@ -1321,43 +1377,61 @@ export class Engine extends EventEmitter {
 
   // ---------------------------------------------------------------- statistics
 
+  /** Name of an account in the statistics: the current nickname or email, else what the ledger remembers. */
+  private accountLabel = (id: string): { label: string; email?: string } => {
+    if (!id) return { label: this.t('stats.unattributed') }
+    const a = this.s.accounts.find((x) => x.id === id)
+    if (a) return { label: accountName(a), email: a.email }
+    const kept = this.ledger.account(id)
+    return { label: kept?.nickname || kept?.email || id.slice(0, 8), email: kept?.email }
+  }
+
   async getStats(query: StatsQuery): Promise<UsageStats> {
     // Right after the first start the transcripts are still being read (about 10 s for a month); wait for it.
     if (!this.scanner.complete) await this.refreshEstimates()
-    const key = `${query.range}|${query.accountId ?? ''}|${this.settings.timezone}`
+    const accountId = query.accountId || 'all'
+    const key = `${query.range}|${accountId}|${this.settings.timezone}|${this.settings.language}`
     const hit = this.statsCache.get(key)
-    if (hit && hit.revision === this.scanner.revision && Date.now() - hit.at < MIN) return hit.value
+    if (hit && hit.revision === this.ledger.revision && Date.now() - hit.at < MIN) return hit.value
     const titles = new Map<string, TranscriptMeta>()
     for (const t of listTranscripts()) titles.set(t.cliSessionId, t)
-    const desktopTitles = new Map<string, string>()
-    const desktopCwds = new Map<string, string>()
-    for (const f of this.folders) {
-      for (const s of readSessions(f)) {
-        if (!s.cliSessionId) continue
-        if (s.title && !desktopTitles.has(s.cliSessionId)) desktopTitles.set(s.cliSessionId, s.title)
-        if (s.cwd && !desktopCwds.has(s.cliSessionId)) desktopCwds.set(s.cliSessionId, s.cwd)
-      }
-    }
-    const value = computeStats(Object.values(this.scanner.buckets), {
+    const desktopTitles = new Map<string, { title?: string; cwd?: string }>()
+    for (const f of this.folders) for (const s of readSessions(f)) if (s.cliSessionId && !desktopTitles.has(s.cliSessionId)) desktopTitles.set(s.cliSessionId, { title: s.title, cwd: s.cwd })
+    const value = computeStats(this.ledger.entries(), {
       range: query.range,
-      accountId: query.accountId,
+      accountId,
       now: Date.now(),
       timeZone: this.settings.timezone,
-      accountOf: this.bucketAccounts(),
+      accountOf: this.ledgerAccounts(),
+      accountLabel: this.accountLabel,
       session: (id) => {
         const t = titles.get(id)
+        const d = desktopTitles.get(id)
+        const kept = this.ledger.session(id)
         return {
-          title: desktopTitles.get(id) ?? t?.title ?? t?.firstPrompt,
-          cwd: t?.cwd ?? desktopCwds.get(id),
-          projectDir: t?.projectDir ?? this.scanner.projectOf(id),
+          title: d?.title ?? t?.title ?? t?.firstPrompt ?? kept?.title,
+          cwd: t?.cwd ?? d?.cwd ?? kept?.cwd,
+          projectDir: t?.projectDir ?? kept?.projectDir ?? this.scanner.projectOf(id),
           lastActivityAt: t?.lastActivityAt
         }
       },
-      partial: !this.scanner.complete
+      partial: !this.scanner.complete,
+      note: this.t('stats.note')
     })
     saveHistoryCache()
-    if (!value.partial) this.statsCache.set(key, { at: Date.now(), revision: this.scanner.revision, value })
+    if (!value.partial) this.statsCache.set(key, { at: Date.now(), revision: this.ledger.revision, value })
     return value
+  }
+
+  async ledgerCsv(query: StatsQuery): Promise<{ csv: string; fileName: string }> {
+    if (!this.scanner.complete) await this.refreshEstimates()
+    const csv = ledgerCsv(
+      this.ledger.entries(),
+      { range: query.range, accountId: query.accountId || 'all', now: Date.now(), timeZone: this.settings.timezone, accountOf: this.ledgerAccounts(), accountLabel: this.accountLabel },
+      this.t('csv.header').split('|')
+    )
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: resolveTimeZone(this.settings.timezone), year: 'numeric', month: '2-digit', day: '2-digit' }).format(Date.now())
+    return { csv, fileName: this.t('csv.fileName', { day }) }
   }
 
   // ---------------------------------------------------------------- one-click setup
