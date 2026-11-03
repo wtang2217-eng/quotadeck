@@ -74,7 +74,8 @@ jobs:
       - name: Launch check (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb > /dev/null
+          # The runner has no CJK fonts; a Chinese desktop has them, so install them for honest screenshots.
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb fonts-noto-cjk > /dev/null
           bin=$(ls release/*/linux-unpacked/quotadeck | head -1)
           timeout 300 xvfb-run -a "$bin" --no-sandbox --demo --screenshots="$PWD/launch-shots"
           ls launch-shots/*.png
