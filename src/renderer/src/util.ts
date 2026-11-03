@@ -1,6 +1,6 @@
 import { flushSync } from 'react-dom'
 import { accountName, formatClock, formatIn } from '@shared/format'
-import type { AccountStatus, AccountView, ActivityType, Language, LimitKind, PlanInfo, UsageSnapshot, UsageWindow } from '@shared/types'
+import type { AccountStatus, AccountView, ActivityType, Language, LimitKind, PlanInfo, TokenTotals, UsageSnapshot, UsageWindow } from '@shared/types'
 import type { T, TKey } from './i18n'
 
 export type Tone = 'ok' | 'warn' | 'bad' | 'muted' | 'info' | 'accent'
@@ -132,11 +132,22 @@ export function displayName(a: AccountView | undefined): string {
   return a ? accountName(a) : '—'
 }
 
-/** First visible character for an avatar. */
+/** First letter for an avatar: the email's first letter. */
 export function initial(a: Pick<AccountView, 'nickname' | 'email' | 'displayName' | 'id'>): string {
-  const name = a.nickname || a.displayName || a.email || a.id
+  const name = a.email || a.nickname || a.displayName || a.id
   const ch = Array.from(name.trim())[0] ?? '?'
   return ch.toUpperCase()
+}
+
+/** For narrow places: the name the user gave, else the part of the email before "@". Show the full name on hover. */
+export function shortName(a: AccountView | undefined): string {
+  if (!a) return '—'
+  return a.nickname || (a.email ? a.email.split('@')[0] : a.displayName || a.id.slice(0, 8))
+}
+
+/** Same for a ledger label, which is the nickname or the email. */
+export function shortLabel(label: string): string {
+  return label.includes('@') ? label.split('@')[0] : label
 }
 
 export function remaining(w: UsageWindow | undefined): number | undefined {
@@ -217,4 +228,35 @@ export function resolveTheme(theme: 'system' | 'light' | 'dark'): 'light' | 'dar
 export function errMessage(e: unknown): string {
   if (e instanceof Error) return e.message
   return String(e)
+}
+
+/** "$1,234.56"; under a dollar keeps cents, large amounts drop them. */
+export function formatUsd(n: number, opts?: { compact?: boolean }): string {
+  const abs = Math.abs(n)
+  if (opts?.compact && abs >= 10_000) return `$${(n / 1000).toFixed(abs >= 100_000 ? 0 : 1)}k`
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: abs >= 1000 ? 0 : 2, maximumFractionDigits: abs >= 1000 ? 0 : 2 })}`
+}
+
+/** Token counts in K / M / B. */
+export function formatTokens(n: number): string {
+  const abs = Math.abs(n)
+  if (abs >= 1e9) return `${(n / 1e9).toFixed(abs >= 1e10 ? 1 : 2)}B`
+  if (abs >= 1e6) return `${(n / 1e6).toFixed(abs >= 1e8 ? 0 : 1)}M`
+  if (abs >= 1e3) return `${(n / 1e3).toFixed(abs >= 1e5 ? 0 : 1)}K`
+  return String(Math.round(n))
+}
+
+export function sumTokens(t: TokenTotals | undefined): number {
+  return t ? t.input + t.output + t.cacheWrite5m + t.cacheWrite1h + t.cacheRead : 0
+}
+
+/** Axis labels: whole dollars, thousands as k. */
+export function formatUsdAxis(n: number): string {
+  if (n >= 1000) return `$${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k`
+  return `$${Math.round(n)}`
+}
+
+/** A space between Chinese and Latin letters or digits, as Chinese typesetting expects ("的 5 小时额度"). */
+export function cjkSpace(s: string): string {
+  return s.replace(/([一-鿿])([0-9A-Za-z])/g, '$1 $2').replace(/([0-9A-Za-z%])([一-鿿])/g, '$1 $2')
 }

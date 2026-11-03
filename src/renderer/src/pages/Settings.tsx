@@ -1,10 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { DEFAULT_CONTINUE_PROMPT } from '@shared/defaults'
 import { formatAgo } from '@shared/format'
-import type { IntegrationStatus, Language, Settings as SettingsT, TerminalChoice, ThemeSetting } from '@shared/types'
+import type { AccentChoice, Density, IntegrationStatus, Language, Settings as SettingsT, TerminalChoice, ThemeSetting } from '@shared/types'
 import {
   IconBell,
   IconCheck,
+  IconCommand,
+  IconUpdate,
+  IconEye,
   IconFolder,
   IconInfo,
   IconMerge,
@@ -34,6 +37,13 @@ const ZONES = [
   'UTC'
 ]
 
+const ACCENT_OPTIONS: { value: AccentChoice; color: string; key: TKey }[] = [
+  { value: 'indigo', color: '#3E63DD', key: 'accentIndigo' },
+  { value: 'teal', color: '#12A594', key: 'accentTeal' },
+  { value: 'orange', color: '#F76B15', key: 'accentOrange' },
+  { value: 'graphite', color: '#27272A', key: 'accentGraphite' }
+]
+
 const SOUND_LABEL: Record<SoundName, TKey> = {
   click: 'soundClick',
   toggleOn: 'soundToggleOn',
@@ -60,6 +70,30 @@ function Section({ icon, title, sub, children }: { icon: ReactNode; title: strin
       </div>
       {children}
     </section>
+  )
+}
+
+/** Records a key combination: press it in the box; Backspace clears it. */
+function ShortcutInput({ value, mac, onSave }: { value: string; mac: boolean; onSave: (v: string) => void }) {
+  const { t } = useApp()
+  const shown = (v: string) => (v ? v.replace('CommandOrControl', mac ? '⌘' : 'Ctrl').replace(/\+/g, ' + ') : '')
+  return (
+    <input
+      className="input"
+      style={{ width: 220 }}
+      readOnly
+      value={shown(value)}
+      placeholder={t('setShortcutPlaceholder')}
+      onKeyDown={(e) => {
+        e.preventDefault()
+        if (e.key === 'Backspace' || e.key === 'Delete') return onSave('')
+        if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return
+        const parts = [e.ctrlKey || e.metaKey ? 'CommandOrControl' : '', e.altKey ? 'Alt' : '', e.shiftKey ? 'Shift' : ''].filter(Boolean)
+        if (!parts.length) return
+        const key = e.key.length === 1 ? e.key.toUpperCase() : e.key
+        onSave([...parts, key].join('+'))
+      }}
+    />
   )
 }
 
@@ -104,6 +138,27 @@ export function Settings() {
   useEffect(() => setDirOverride(s.desktopDataDirOverride ?? ''), [s.desktopDataDirOverride])
   useEffect(() => setPort(String(s.serverPort)), [s.serverPort])
   useEffect(() => setVolume(Math.round(s.soundVolume * 100)), [s.soundVolume])
+
+  const [checking, setChecking] = useState(false)
+  const info = state.update
+  const updateLine = info?.available
+    ? t('setUpdateAvailable', { v: info.latest ?? '' })
+    : info?.checkedAt
+      ? t('setUpdateLatest', { v: state.appVersion, ago: formatAgo(info.checkedAt, lang, now) })
+      : t('setUpdateNever')
+  const checkNow = async () => {
+    setChecking(true)
+    try {
+      const res = await api.checkForUpdates()
+      if (res.available && res.url) toast(t('setUpdateAvailable', { v: res.latest ?? '' }), 'ok')
+      else toast(t('setUpdateUpToDate'), 'ok')
+      setState(await api.getState())
+    } catch (e) {
+      toast(t('errGeneric', { msg: errMessage(e) }), 'bad')
+    } finally {
+      setChecking(false)
+    }
+  }
 
   const update = async (patch: Partial<SettingsT>, savedToast = false) => {
     try {
@@ -162,18 +217,7 @@ export function Settings() {
       </header>
 
       <div className="settings">
-        <Section icon={<IconSliders size={16} />} title={t('setGeneral')}>
-          <Row label={t('setLanguage')}>
-            <Segmented<Language>
-              ariaLabel={t('setLanguage')}
-              value={s.language}
-              onChange={(v) => void update({ language: v, continuePrompt: s.continuePrompt === DEFAULT_CONTINUE_PROMPT[s.language] ? DEFAULT_CONTINUE_PROMPT[v] : s.continuePrompt })}
-              options={[
-                { value: 'zh-CN', label: '中文' },
-                { value: 'en', label: 'English' }
-              ]}
-            />
-          </Row>
+        <Section icon={<IconEye size={16} />} title={t('setAppearance')}>
           <Row label={t('setTheme')}>
             <Segmented<ThemeSetting>
               ariaLabel={t('setTheme')}
@@ -196,6 +240,54 @@ export function Settings() {
               ]}
             />
           </Row>
+          <Row label={t('setAccent')} hint={t('setAccentHint')}>
+            <div className="swatch-row" role="radiogroup" aria-label={t('setAccent')}>
+              {ACCENT_OPTIONS.map((a) => (
+                <button
+                  key={a.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={s.accent === a.value}
+                  className={`swatch-btn${s.accent === a.value ? ' on' : ''}`}
+                  onClick={() => {
+                    document.documentElement.dataset.accent = a.value
+                    void update({ accent: a.value })
+                  }}
+                >
+                  <span className="swatch-dot" style={{ background: a.color }} />
+                  {t(a.key)}
+                </button>
+              ))}
+            </div>
+          </Row>
+          <Row label={t('setDensity')} hint={t('setDensityHint')}>
+            <Segmented<Density>
+              ariaLabel={t('setDensity')}
+              value={s.density === 'compact' ? 'compact' : 'comfortable'}
+              onChange={(v) => {
+                document.documentElement.dataset.density = v
+                void update({ density: v })
+              }}
+              options={[
+                { value: 'comfortable', label: t('densityComfortable') },
+                { value: 'compact', label: t('densityCompact') }
+              ]}
+            />
+          </Row>
+        </Section>
+
+        <Section icon={<IconSliders size={16} />} title={t('setGeneral')}>
+          <Row label={t('setLanguage')}>
+            <Segmented<Language>
+              ariaLabel={t('setLanguage')}
+              value={s.language}
+              onChange={(v) => void update({ language: v, continuePrompt: s.continuePrompt === DEFAULT_CONTINUE_PROMPT[s.language] ? DEFAULT_CONTINUE_PROMPT[v] : s.continuePrompt })}
+              options={[
+                { value: 'zh-CN', label: '中文' },
+                { value: 'en', label: 'English' }
+              ]}
+            />
+          </Row>
           <Row label={t('setTimezone')} hint={t('setTimezoneHint')}>
             <select className="select" style={{ width: 250 }} value={s.timezone} onChange={(e) => void update({ timezone: e.target.value })}>
               <option value="system">{t('setTimezoneSystem', { tz: systemTz })}</option>
@@ -212,6 +304,29 @@ export function Settings() {
           </Row>
           <Row label={t('setStartHidden')}>
             <Toggle label={t('setStartHidden')} on={s.startHidden} onChange={(v) => void update({ startHidden: v })} />
+          </Row>
+        </Section>
+
+        <Section icon={<IconCommand size={16} />} title={t('setShortcuts')}>
+          <Row label={t('setGlobalShortcut')} hint={t('setGlobalShortcutHint')}>
+            <ShortcutInput value={s.globalShortcut} mac={state.platform === 'darwin'} onSave={(v) => void update({ globalShortcut: v }, true)} />
+          </Row>
+          {state.platform === 'darwin' && (
+            <Row label={t('setTrayPercent')} hint={t('setTrayPercentHint')}>
+              <Toggle label={t('setTrayPercent')} on={s.trayShowPercent} onChange={(v) => void update({ trayShowPercent: v })} />
+            </Row>
+          )}
+        </Section>
+
+        <Section icon={<IconUpdate size={16} />} title={t('setUpdates')}>
+          <Row label={t('setAutoUpdates')} hint={t('setAutoUpdatesHint')}>
+            <Toggle label={t('setAutoUpdates')} on={s.autoCheckUpdates} onChange={(v) => void update({ autoCheckUpdates: v })} />
+          </Row>
+          <Row label={t('setCheckNow')} hint={updateLine}>
+            <button type="button" className="btn btn-sm" disabled={checking} onClick={() => void checkNow()}>
+              {checking && <Spinner />}
+              {t('setCheckNowGo')}
+            </button>
           </Row>
         </Section>
 

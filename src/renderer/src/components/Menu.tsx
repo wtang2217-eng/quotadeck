@@ -4,6 +4,8 @@ export interface MenuItem {
   label: ReactNode
   icon?: ReactNode
   sub?: ReactNode
+  /** A second line under the label. */
+  detail?: ReactNode
   danger?: boolean
   disabled?: boolean
   onSelect: () => void
@@ -16,11 +18,16 @@ export function Menu({
   trigger,
   items,
   up,
+  align = 'right',
+  width,
   label
 }: {
   trigger: (props: { open: boolean; toggle: () => void }) => ReactNode
   items: MenuEntry[]
   up?: boolean
+  /** Which edge of the trigger the menu lines up with. */
+  align?: 'left' | 'right'
+  width?: number
   label?: string
 }) {
   const [open, setOpen] = useState(false)
@@ -42,7 +49,7 @@ export function Menu({
     <div className="menu-anchor" ref={ref}>
       {trigger({ open, toggle: () => setOpen((o) => !o) })}
       {open && (
-        <div className={`menu${up ? ' up' : ''}`} role="menu" aria-label={label}>
+        <div className={`menu${up ? ' up' : ''}${align === 'left' ? ' left' : ''}`} role="menu" aria-label={label} style={width ? { width } : undefined}>
           {items.map((it, i) => {
             if (it === 'sep') return <div key={i} className="menu-sep" />
             if ('heading' in it)
@@ -64,7 +71,14 @@ export function Menu({
                 }}
               >
                 {it.icon}
-                <span className="ellipsis">{it.label}</span>
+                {it.detail ? (
+                  <span className="menu-item-text">
+                    <span className="ellipsis">{it.label}</span>
+                    <span className="menu-item-detail ellipsis">{it.detail}</span>
+                  </span>
+                ) : (
+                  <span className="ellipsis">{it.label}</span>
+                )}
                 {it.sub && <span className="menu-item-sub">{it.sub}</span>}
               </button>
             )

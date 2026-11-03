@@ -1,0 +1,381 @@
+/* Shell: sidebar (scope, navigation, status), the top strip, page heads and sections. */
+
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  height: 100%;
+}
+
+/* The top strip drags the window; anything clickable inside opts out. */
+.drag {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.drag button,
+.drag a,
+.drag input,
+.drag [role='button'] {
+  -webkit-app-region: no-drag;
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+}
+.side-strip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--strip-h);
+  padding: 0 14px 0 calc(16px + var(--strip-left));
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-1);
+}
+.side-strip .logo-img {
+  border-radius: 5px;
+}
+
+/* Scope switcher: whose numbers the whole app shows. */
+.scope {
+  margin: 2px 10px 6px;
+}
+.scope-btn {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
+}
+.scope-btn:hover {
+  background: var(--side-hover);
+}
+.scope-btn[aria-expanded='true'] {
+  background: var(--surface);
+  border-color: var(--line);
+}
+.scope-mark {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 7px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+.scope-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.scope-label {
+  font-size: 11.5px;
+  color: var(--text-3);
+  line-height: 1.3;
+}
+.scope-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-1);
+  line-height: 1.35;
+}
+.scope-btn > svg {
+  color: var(--text-3);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 10px;
+}
+.nav-sep {
+  height: 1px;
+  margin: 8px 10px;
+  background: var(--line);
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--nav-h);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: none;
+  color: var(--text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.nav-item svg {
+  flex: none;
+  color: var(--text-3);
+  transition: color var(--t-fast) var(--ease);
+}
+.nav-item:hover {
+  background: var(--side-hover);
+  color: var(--text-1);
+}
+.nav-item.active {
+  background: var(--side-active);
+  color: var(--text-1);
+}
+.nav-item.active svg {
+  color: var(--accent-text);
+}
+.nav-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: var(--bad-soft);
+  color: var(--bad-text);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.side-foot {
+  margin-top: auto;
+  padding: 8px 10px 12px;
+  border-top: 1px solid var(--line);
+}
+.side-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: none;
+  font-size: 12.5px;
+  color: var(--text-2);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--t-fast) var(--ease);
+}
+.side-row:hover {
+  background: var(--side-hover);
+  color: var(--text-1);
+}
+.side-row svg {
+  flex: none;
+  color: var(--text-3);
+}
+.side-row .side-value {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-1);
+  font-weight: 500;
+}
+.side-row .side-value.muted {
+  color: var(--text-3);
+  font-weight: 400;
+}
+.side-row .side-value.accent {
+  color: var(--accent-text);
+}
+
+/* Status dot: only drawn when something needs attention. */
+.dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-4);
+}
+.dot.warn {
+  background: var(--warn);
+}
+.dot.bad {
+  background: var(--bad);
+}
+.dot.ok {
+  background: var(--ok);
+}
+.dot.accent {
+  background: var(--accent);
+}
+
+/* ---------- Main ---------- */
+.main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface);
+}
+.topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--strip-h);
+  padding: 0 calc(16px + var(--strip-right)) 0 var(--page-x);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.crumbs b {
+  font-weight: 500;
+  color: var(--text-1);
+}
+.crumbs svg {
+  color: var(--text-4);
+}
+.cmd-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 230px;
+  height: 28px;
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  color: var(--text-3);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition:
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.cmd-trigger:hover {
+  border-color: var(--line-strong);
+  color: var(--text-2);
+}
+.cmd-trigger .kbd {
+  margin-left: auto;
+}
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--kbd);
+  color: var(--text-3);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 500;
+}
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden auto;
+}
+.page {
+  padding: 26px var(--page-x) 56px;
+  max-width: 1160px;
+}
+
+/* ---------- Page head ---------- */
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.page-head-text {
+  min-width: 0;
+  flex: 1;
+}
+.page-title {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+.page-sub {
+  margin-top: 4px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+/* ---------- Sections: whitespace, a title, a hairline ---------- */
+.sec {
+  margin-top: var(--sec-gap);
+}
+.sec-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 28px;
+  margin-bottom: 10px;
+}
+.sec-title {
+  font-size: var(--fs-section);
+  font-weight: 600;
+  color: var(--text-1);
+}
+.sec-sub {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.sec-tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.note svg {
+  flex: none;
+}

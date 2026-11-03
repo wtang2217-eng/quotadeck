@@ -1,5 +1,5 @@
 // Browser-only stand-in for window.qd, backed by the shared demo data.
-// Query parameters for previewing states: ?lang=en ?theme=dark ?empty=1 ?conflict=1 ?warn=1 ?dup=1 ?ratio=1 ?page=settings ?dialog=switch|add ?still=1
+// Query parameters for previewing states: ?lang=en ?theme=dark ?accent=indigo|teal|orange|graphite ?density=compact ?empty=1 ?conflict=1 ?warn=1 ?dup=1 ?ratio=1 ?page=settings ?dialog=switch|add ?still=1
 
 import type { QuotaDeckApi } from '@shared/api'
 import { demoConversations, demoProjects, demoSetupStatus, demoState, demoStats, setDemoOrgLabel } from '@shared/demo'
@@ -21,6 +21,9 @@ export function createMockApi(): QuotaDeckApi {
     const s = demoState(l)
     const theme = params.get('theme')
     if (theme === 'dark' || theme === 'light') s.settings.theme = theme
+    const accent = params.get('accent')
+    if (accent === 'indigo' || accent === 'teal' || accent === 'orange' || accent === 'graphite') s.settings.accent = accent
+    if (params.get('density') === 'compact') s.settings.density = 'compact'
     if (params.get('empty') === '1') {
       s.accounts = []
       s.recommendedAccountId = undefined
@@ -330,7 +333,7 @@ export function createMockApi(): QuotaDeckApi {
         send({ step: 'cli', phase: 'running', message: 'Setting up Claude Code...' }, (t += 1200))
         send({ step: 'cli', phase: 'ok', message: zh ? '已安装 2.1.283' : 'Installed 2.1.283' }, (t += 1200))
       }
-      send({ step: 'main-account', phase: 'ok', message: zh ? '已加入 主号' : 'Added Main' }, (t += 600))
+      send({ step: 'main-account', phase: 'ok', message: zh ? '已加入 alice.chen@example.com' : 'Added alice.chen@example.com' }, (t += 600))
       if (opts.connectIntegration) send({ step: 'integration', phase: 'ok', message: zh ? '已接入' : 'Connected' }, (t += 600))
       send({ step: 'open-at-login', phase: opts.openAtLogin ? 'ok' : 'skipped' }, (t += 400))
       window.setTimeout(() => {

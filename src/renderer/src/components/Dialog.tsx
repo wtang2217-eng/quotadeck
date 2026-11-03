@@ -9,6 +9,7 @@ import { IconX } from './icons'
  */
 export function Dialog({
   title,
+  kicker,
   sub,
   icon,
   wide,
@@ -18,6 +19,8 @@ export function Dialog({
   footer
 }: {
   title: ReactNode
+  /** Mono label above the title. */
+  kicker?: ReactNode
   sub?: ReactNode
   icon?: ReactNode
   wide?: boolean
@@ -47,7 +50,9 @@ export function Dialog({
       if (e.key === 'Escape' && dismissable) close()
     }
     window.addEventListener('keydown', onKey)
-    const first = panel.current?.querySelector<HTMLElement>('[data-autofocus], input, textarea, select, button.btn-primary')
+    const first =
+      panel.current?.querySelector<HTMLElement>('[data-autofocus]:not(:disabled)') ??
+      panel.current?.querySelector<HTMLElement>('input, textarea, select, button.btn-primary')
     first?.focus({ preventScroll: true })
     return () => window.removeEventListener('keydown', onKey)
   }, [close, dismissable])
@@ -63,6 +68,7 @@ export function Dialog({
         <div className="dialog-head">
           {icon && <div className="dialog-head-icon">{icon}</div>}
           <div style={{ flex: 1, minWidth: 0 }}>
+            {kicker && <span className="kicker dialog-kicker">{kicker}</span>}
             <h2 className="dialog-title">{title}</h2>
             {sub && <div className="dialog-sub">{sub}</div>}
           </div>

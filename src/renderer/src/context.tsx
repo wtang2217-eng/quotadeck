@@ -32,6 +32,11 @@ export interface AppCtx {
   now: number
   page: Page
   navigate: (p: Page) => void
+  /** Whose numbers the app shows: "all" or one account id. Follows the sidebar's scope switcher. */
+  scope: string
+  setScope: (scope: string) => void
+  /** Open the command palette. */
+  openPalette: () => void
   openDialog: (d: DialogState) => void
   closeDialog: () => void
   toast: (message: string, kind?: ToastKind) => void
