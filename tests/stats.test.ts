@@ -30,7 +30,9 @@ describe('model prices', () => {
   })
 
   it('uses one row per model of the list', () => {
-    expect(priceOf('claude-opus-5-5')).toEqual({ model: 'Opus 5.5', input: 4, output: 20, cacheRead: 0.2 })
+    expect(priceOf('claude-opus-5-5')).toEqual({ model: 'Opus 5.5', input: 4, output: 20, cacheRead: 0.2, fast: { input: 8, output: 40 } })
+    // The official page lists $0.10 for Sonnet 5.5 cache reads.
+    expect(priceOf('claude-sonnet-5-5')).toEqual({ model: 'Sonnet 5.5', input: 2, output: 10, cacheRead: 0.1 })
     expect(priceOf('claude-fable-5')).toMatchObject({ model: 'Fable 5', cacheRead: 1 })
     expect(priceOf('claude-fable-5-1')).toMatchObject({ model: 'Fable 5.1', cacheRead: 0.25 })
     expect(priceOf('claude-opus-4-20250514').model).toBe('Opus 4')
@@ -93,7 +95,15 @@ describe('computeStats', () => {
     expect(s.heatmap[0][23]).toBe(0.25)
     // The range starts on Oct 28, 00:00 in Shanghai.
     expect(s.from).toBe(Date.UTC(2026, 9, 27, 16))
-    expect(s.pricing).toEqual({ asOf: '2026-10-06', currency: 'USD', note: 'note' })
+    expect(s.pricing).toEqual({
+      asOf: '2026-11-03',
+      source: 'https://platform.claude.com/docs/en/about-claude/pricing',
+      currency: 'USD',
+      note: 'note',
+      webSearchUsd: 0.01,
+      usOnlyMultiplier: 1.1
+    })
+    expect(s.totals.webSearches).toBe(0)
   })
 
   it('gives today by the hour and the fixed totals whatever the range', () => {
