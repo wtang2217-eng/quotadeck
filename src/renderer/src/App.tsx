@@ -16,7 +16,7 @@ import { Conversations } from './pages/Conversations'
 import { Ledger } from './pages/Ledger'
 import { Overview } from './pages/Overview'
 import { Settings } from './pages/Settings'
-import { Setup } from './pages/Setup'
+import { Onboarding, Setup } from './pages/Setup'
 import { configureSound, installClickSounds, play, preloadSounds } from './sound'
 import { resolveTheme } from './util'
 
@@ -111,12 +111,13 @@ export function App({ api }: { api: QuotaDeckApi }) {
     if (state && scope !== 'all' && !state.accounts.some((a) => a.id === scope)) setScopeRaw('all')
   }, [state?.accounts, scope])
 
-  // The setup page opens by itself on a first start.
+  // First start: the welcome and setup flow opens over the app by itself, once.
   const setupShown = useRef(false)
+  const [onboarding, setOnboarding] = useState(false)
   useEffect(() => {
     if (state?.needsSetup && !setupShown.current) {
       setupShown.current = true
-      setPage('setup')
+      setOnboarding(true)
     }
   }, [state?.needsSetup])
 
@@ -235,6 +236,7 @@ export function App({ api }: { api: QuotaDeckApi }) {
         </main>
       </div>
 
+      {onboarding && <Onboarding onClose={() => setOnboarding(false)} />}
       {palette && <CommandPalette onClose={() => setPalette(false)} />}
       {dialog?.type === 'add' && <AddAccountDialog key="add" reLoginAccountId={dialog.reLoginAccountId} onClose={close} />}
       {dialog?.type === 'switch' && (
