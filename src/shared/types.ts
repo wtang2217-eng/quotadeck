@@ -276,6 +276,8 @@ export interface Settings {
   globalShortcut: string
   /** Look for a new QuotaDeck release on GitHub at start and every 12 hours. */
   autoCheckUpdates: boolean
+  /** Read status.claude.com at start and every 5 minutes, to show official outages. */
+  checkServiceStatus: boolean
 }
 
 /** indigo, teal and orange are Radix Colors step 9; graphite is the text color itself. */
@@ -312,6 +314,50 @@ export interface AppState {
   pendingSwitch?: PendingSwitch
   /** Result of the last check for a new QuotaDeck version. */
   update?: UpdateInfo
+  /** Anthropic's official status (status.claude.com), when Settings.checkServiceStatus is on and it was reachable. */
+  serviceStatus?: ServiceStatus
+}
+
+// ---------------------------------------------------------------- official service status
+
+export interface ServiceStatus {
+  /** Statuspage's overall indicator: none = all operational. */
+  indicator: 'none' | 'minor' | 'major' | 'critical'
+  /** e.g. "All Systems Operational", "Partially Degraded Service". */
+  description: string
+  /**
+   * Components, Claude Code, Claude API and claude.ai first. status: operational, degraded_performance,
+   * partial_outage, major_outage or under_maintenance.
+   */
+  components: Array<{ name: string; status: string }>
+  checkedAt: number
+  /** The status page, to link to. */
+  url: string
+}
+
+// ---------------------------------------------------------------- settings backup
+
+/** What a settings export holds. No credentials and no ledger. */
+export interface SettingsBackup {
+  kind: 'quotadeck-settings'
+  version: 1
+  exportedAt: number
+  settings: Partial<Settings>
+  /** Nicknames and colors, matched by account id or email on import. */
+  accounts: Array<{ id: string; email?: string; nickname?: string; color: string }>
+  favorites: string[]
+  orgLabels: Record<string, string>
+}
+
+export interface ImportResult extends ActionResult {
+  /** The user closed the file dialog. */
+  cancelled?: boolean
+  /** What was taken over. */
+  applied?: { settings: number; accounts: number; favorites: number; orgLabels: number }
+  /** Fields that were not recognized or had the wrong type, and were left out. */
+  dropped?: string[]
+  /** Copy of the settings from before the import. */
+  backupPath?: string
 }
 
 export type LoginPhase = 'starting' | 'waiting-browser' | 'verifying' | 'done' | 'failed' | 'cancelled'
@@ -624,7 +670,19 @@ export interface UsageStats {
     activeDays: number
     webSearches: number
     background: { tokens: TokenTotals; costUsd: number; webSearches: number }
+    /** cacheRead ÷ (input + cacheRead + cacheWrite5m + cacheWrite1h), 0-1. */
+    cacheHitRate: number
+    /** What the cache reads saved: per model, cacheRead × (input price − cache-read price), in the request's tier. */
+    cacheSavingsUsd: number
+    /** What the same work would have cost with no prompt caching at all (every cached token billed as input). */
+    noCacheUsd: number
   }
+  /**
+   * This calendar month's dollars against the plans' monthly prices, for the accounts in view whose plan has a
+   * public monthly price (Pro, Max 5x, Max 20x); `excluded` counts the others (Team, Enterprise, free, unknown).
+   * `ratio` is undefined when no account in view is compared.
+   */
+  subscription: { monthUsd: number; planMonthlyUsd: number; ratio?: number; accounts: number; excluded: number; asOf: string; source: string }
   /** Independent of the range (same account filter): today so far, this calendar month, everything recorded. */
   fixed: { todayUsd: number; monthUsd: number; allTimeUsd: number }
   /** Every day of the range, oldest first, including empty days. */

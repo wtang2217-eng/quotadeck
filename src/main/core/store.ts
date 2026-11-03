@@ -52,6 +52,8 @@ export interface PersistedState {
   updateNotified?: string
   /** Names the user gave organizations that are not in the panel (old accounts), by organization uuid. */
   orgLabels: Record<string, string>
+  /** Day of the last automatic settings backup (Date.toDateString()). */
+  lastSettingsBackup?: string
 }
 
 export function freshState(locale: string): PersistedState {

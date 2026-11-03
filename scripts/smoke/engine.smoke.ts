@@ -82,6 +82,10 @@ it('engine smoke', async () => {
   }
   for (const [k, [req, bg]] of Object.entries(sums)) console.log(`${k}: transcript only $${req.toFixed(2)} → with background $${(req + bg).toFixed(2)} (background $${bg.toFixed(2)})`)
   console.log('background line (all):', JSON.stringify(everything.totals.background))
+  const month = await e.getStats({ range: '30d' })
+  console.log('cache (30d):', JSON.stringify({ hit: month.totals.cacheHitRate, saved: month.totals.cacheSavingsUsd, noCache: month.totals.noCacheUsd, actual: month.totals.costUsd }))
+  console.log('subscription:', JSON.stringify(month.subscription))
+  console.log('service status:', JSON.stringify(e.getState().serviceStatus && { ...e.getState().serviceStatus, components: e.getState().serviceStatus.components.slice(0, 3) }))
   const csv = await e.ledgerCsv({ range: '30d', accountId: 'all' })
   console.log('csv rows (30d, day × account × model)', csv.csv.trimEnd().split('\r\n').length - 1, 'file', csv.fileName)
   t = Date.now()

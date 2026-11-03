@@ -4,7 +4,9 @@
 import { resolveTimeZone } from '@shared/format'
 import type { StatsAccount, StatsConversation, StatsModel, StatsProject, StatsRange, TokenTotals, UsageStats } from '@shared/types'
 import type { LedgerEntry } from './ledger'
-import { modelInfo, priceOf, PRICE_LIST_DATE, PRICE_SOURCE, US_ONLY_MULTIPLIER, WEB_SEARCH_USD } from './pricing'
+import { planMonthlyUsd, SUBSCRIPTION_PRICES } from '@shared/subscriptions'
+import type { PlanKind } from '@shared/types'
+import { cacheEconomics, modelInfo, priceOf, PRICE_LIST_DATE, PRICE_SOURCE, US_ONLY_MULTIPLIER, WEB_SEARCH_USD } from './pricing'
 
 const HOUR = 3_600_000
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -37,6 +39,8 @@ export interface StatsContext {
   partial: boolean
   /** The "list prices, for reference only" sentence in the UI language. */
   note: string
+  /** The accounts of the panel and their plans, for the subscription comparison. */
+  plans?: Array<{ id: string; plan?: PlanKind }>
 }
 
 interface LocalTime {
@@ -127,6 +131,7 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
   const mine: LedgerEntry[] = []
   let firstDay: string | undefined
   const fixed = { todayUsd: 0, monthUsd: 0, allTimeUsd: 0 }
+  const monthByRow = new Map<string, number>()
   for (const e of entries) {
     const a = ctx.accountOf(e)
     if (!all && a !== ctx.accountId) continue
@@ -134,9 +139,17 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
     const local = clock(e.h)
     if (!firstDay || local.day < firstDay) firstDay = local.day
     fixed.allTimeUsd += e.c
-    if (local.month === nowLocal.month) fixed.monthUsd += e.c
+    if (local.month === nowLocal.month) {
+      fixed.monthUsd += e.c
+      monthByRow.set(a, (monthByRow.get(a) ?? 0) + e.c)
+    }
     if (local.day === today) fixed.todayUsd += e.c
   }
+  // This month's dollars against the monthly prices of the plans in view.
+  const inView = (ctx.plans ?? []).filter((p) => all || p.id === ctx.accountId)
+  const counted = inView.filter((p) => planMonthlyUsd(p.plan) !== undefined)
+  const planTotal = counted.reduce((s, p) => s + planMonthlyUsd(p.plan)!, 0)
+  const planMonth = counted.reduce((s, p) => s + (monthByRow.get(p.id) ?? 0), 0)
 
   const span = ctx.range === 'today' ? 1 : ctx.range === '7d' ? 7 : ctx.range === '30d' ? 30 : ctx.range === '90d' ? 90 : undefined
   const firstShown = span ? shiftDay(today, -(span - 1)) : (firstDay && firstDay < today ? firstDay : today)
@@ -150,6 +163,8 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
   const totals = acc()
   let webSearches = 0
   const background = { tokens: zeroTokens(), costUsd: 0, webSearches: 0 }
+  let cacheSavings = 0
+  let noCache = 0
   const heatmap = Array.from({ length: 7 }, () => new Array<number>(24).fill(0))
   const models = new Map<string, StatsModel>()
   const sessions = new Map<string, Acc & { last: number; accounts: Map<string, number> }>()
@@ -177,6 +192,9 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
       background.costUsd += e.c
       background.webSearches += e.ws ?? 0
     }
+    const cache = cacheEconomics(e.m, e.p ?? '', e, e.ws ?? 0)
+    cacheSavings += cache.savings
+    noCache += cache.noCache
     heatmap[local.weekday][local.hour] += e.c
 
     const info = modelInfo(e.m)
@@ -244,7 +262,23 @@ export function computeStats(entries: Iterable<LedgerEntry>, ctx: StatsContext):
       conversations: sessions.size,
       activeDays: days.filter((d) => d.requests > 0).length,
       webSearches,
-      background: { ...background, costUsd: r2(background.costUsd) }
+      background: { ...background, costUsd: r2(background.costUsd) },
+      cacheHitRate: (() => {
+        const t = totals.tokens
+        const all = t.input + t.cacheRead + t.cacheWrite5m + t.cacheWrite1h
+        return all > 0 ? Math.round((t.cacheRead / all) * 10_000) / 10_000 : 0
+      })(),
+      cacheSavingsUsd: r2(cacheSavings),
+      noCacheUsd: r2(noCache)
+    },
+    subscription: {
+      monthUsd: r2(planMonth),
+      planMonthlyUsd: planTotal,
+      ratio: planTotal > 0 ? Math.round((planMonth / planTotal) * 100) / 100 : undefined,
+      accounts: counted.length,
+      excluded: inView.length - counted.length,
+      asOf: SUBSCRIPTION_PRICES.asOf,
+      source: SUBSCRIPTION_PRICES.source
     },
     fixed: { todayUsd: r2(fixed.todayUsd), monthUsd: r2(fixed.monthUsd), allTimeUsd: r2(fixed.allTimeUsd) },
     days: days.map((d) => ({ ...done(d), byAccount: Object.fromEntries(Object.entries(d.byAccount).map(([k, v]) => [k, r2(v)])) })),

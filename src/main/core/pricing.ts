@@ -159,8 +159,8 @@ export function webSearchesOf(u: ReplyUsage): number {
   return typeof n === 'number' && n > 0 ? n : 0
 }
 
-/** US dollars at list price for tokens of one model and tier, plus web searches. */
-export function costOfTokens(model: string, tier: string, t: TokenCounts, webSearches = 0): number {
+/** Per-token prices (US dollars per million) of a model in a tier, and the US-only multiplier. */
+function tierPrices(model: string, tier: string): { input: number; output: number; read: number; geo: number } {
   const p = priceOf(model)
   let input = p.input
   let output = p.output
@@ -173,9 +173,26 @@ export function costOfTokens(model: string, tier: string, t: TokenCounts, webSea
   }
   // A listed cache-read price is a ratio of the input price, and keeps that ratio in the fast and long tiers.
   const readRatio = p.cacheRead !== undefined ? p.cacheRead / p.input : 0.1
-  const geo = tier.includes('u') ? US_ONLY_MULTIPLIER : 1
-  const tokens = t.i * input + t.o * output + t.r * input * readRatio + t.w5 * input * 1.25 + t.w1 * input * 2
+  return { input, output, read: input * readRatio, geo: tier.includes('u') ? US_ONLY_MULTIPLIER : 1 }
+}
+
+/** US dollars at list price for tokens of one model and tier, plus web searches. */
+export function costOfTokens(model: string, tier: string, t: TokenCounts, webSearches = 0): number {
+  const { input, output, read, geo } = tierPrices(model, tier)
+  const tokens = t.i * input + t.o * output + t.r * read + t.w5 * input * 1.25 + t.w1 * input * 2
   return (geo * tokens) / 1e6 + webSearches * WEB_SEARCH_USD
+}
+
+/**
+ * What prompt caching did for these tokens: `savings` = cache reads × (input price − cache-read price); `noCache` =
+ * the cost if every cached token (read or written) had been billed as plain input.
+ */
+export function cacheEconomics(model: string, tier: string, t: TokenCounts, webSearches = 0): { savings: number; noCache: number } {
+  const { input, output, read, geo } = tierPrices(model, tier)
+  return {
+    savings: (geo * t.r * (input - read)) / 1e6,
+    noCache: (geo * ((t.i + t.r + t.w5 + t.w1) * input + t.o * output)) / 1e6 + webSearches * WEB_SEARCH_USD
+  }
 }
 
 /** US dollars at list price for one request. */

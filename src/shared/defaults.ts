@@ -41,6 +41,7 @@ export function defaultSettings(systemLocale = 'en'): Settings {
     density: 'comfortable',
     trayShowPercent: true,
     globalShortcut: 'CommandOrControl+Shift+Q',
-    autoCheckUpdates: true
+    autoCheckUpdates: true,
+    checkServiceStatus: true
   }
 }
