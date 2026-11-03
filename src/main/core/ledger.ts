@@ -36,6 +36,12 @@ export interface LedgerEntry {
   m: string
   /** Price tier (pricing.tierOf): "" or absent = standard; "f" fast, "l" long context, "u" US-only inference. */
   p?: string
+  /**
+   * "b": Claude Code's background requests of one run (compacting context, titles, web search, …), from its
+   * cost-state; `run` is "<session>@<start>". Absent: requests from the transcripts.
+   */
+  k?: 'b'
+  run?: string
   /** Tokens: input, output, cache writes (5 min, 1 h), cache read. */
   i: number
   o: number
@@ -81,7 +87,8 @@ interface MetaFile {
   accounts: Record<string, LedgerAccount>
 }
 
-const keyOf = (e: Pick<LedgerEntry, 'a' | 's' | 'm' | 'p'>) => `${e.a}|${e.s}|${e.m}|${e.p ?? ''}`
+const keyOf = (e: Pick<LedgerEntry, 'a' | 's' | 'm' | 'p' | 'k' | 'run'>) => `${e.a}|${e.s}|${e.m}|${e.p ?? ''}|${e.k ?? ''}|${e.run ?? ''}`
+const isBackground = (e: LedgerEntry) => e.k === 'b'
 const monthOf = (h: number) => new Date(h).toISOString().slice(0, 7)
 
 /** The list-price cost of an entry's tokens with the current price table. */
@@ -130,6 +137,8 @@ export function entriesFrom(buckets: Iterable<UsageBucket>, accountOf: (b: Usage
 
 export class Ledger {
   private hours = new Map<number, Map<string, LedgerEntry>>()
+  /** Hours holding each run's background entries. */
+  private runHours = new Map<string, Set<number>>()
   private meta: MetaFile = { version: 1, sessions: {}, accounts: {} }
   private dirtyMonths = new Set<string>()
   private metaDirty = false
@@ -156,6 +165,7 @@ export class Ledger {
         const hour = this.hours.get(e.h) ?? new Map<string, LedgerEntry>()
         hour.set(keyOf(e), e)
         this.hours.set(e.h, hour)
+        if (e.run) this.runHours.set(e.run, (this.runHours.get(e.run) ?? new Set<number>()).add(e.h))
       }
       if (stale) this.dirtyMonths.add(f.month ?? name.slice(0, 7))
     }
@@ -176,18 +186,58 @@ export class Ledger {
     this.metaDirty = true
   }
 
+  /** The hour holds transcript requests (background entries alone do not count: they are booked separately). */
   hasHour(h: number): boolean {
-    return this.hours.has(h)
+    for (const e of this.hours.get(h)?.values() ?? []) if (!isBackground(e)) return true
+    return false
   }
 
-  /** Replace what is recorded for an hour. Returns true when that changed anything. */
+  /** Replace the transcript requests recorded for an hour (background entries stay). Returns true when that changed anything. */
   setHour(h: number, entries: LedgerEntry[]): boolean {
-    const next = new Map(entries.map((e) => [keyOf(e), e]))
     const prev = this.hours.get(h)
-    if (prev ? sameEntries(prev, next) : next.size === 0) return false
+    const next = new Map(entries.filter((e) => !isBackground(e)).map((e) => [keyOf(e), e]))
+    const prevRequests = new Map([...(prev ?? new Map<string, LedgerEntry>())].filter(([, e]) => !isBackground(e)))
+    if (prev ? sameEntries(prevRequests, next) : next.size === 0) return false
+    for (const [k, e] of prev ?? []) if (isBackground(e)) next.set(k, e)
     if (next.size === 0) this.hours.delete(h)
     else this.hours.set(h, next)
     this.dirtyMonths.add(monthOf(h))
+    this.revision++
+    return true
+  }
+
+  /**
+   * Replace the background entries of one run, wherever its earlier version was (the hour of its latest record can
+   * move while a conversation is still going). Returns true when that changed anything.
+   */
+  setBackground(run: string, given: LedgerEntry[]): boolean {
+    const entries: LedgerEntry[] = given.map((e) => ({ ...e, k: 'b', run }))
+    const old: LedgerEntry[] = []
+    for (const h of this.runHours.get(run) ?? []) for (const e of this.hours.get(h)?.values() ?? []) if (e.run === run) old.push(e)
+    const same =
+      old.length === entries.length &&
+      entries.every((e) => {
+        const o = old.find((x) => keyOf(x) === keyOf(e) && x.h === e.h)
+        return !!o && o.i === e.i && o.o === e.o && o.w5 === e.w5 && o.w1 === e.w1 && o.r === e.r && (o.ws ?? 0) === (e.ws ?? 0) && o.a === e.a
+      })
+    if (same) return false
+    for (const h of this.runHours.get(run) ?? []) {
+      const hour = this.hours.get(h)
+      if (!hour) continue
+      for (const [k, e] of hour) if (e.run === run) hour.delete(k)
+      if (hour.size === 0) this.hours.delete(h)
+      this.dirtyMonths.add(monthOf(h))
+    }
+    const hours = new Set<number>()
+    for (const e of entries) {
+      const hour = this.hours.get(e.h) ?? new Map<string, LedgerEntry>()
+      hour.set(keyOf(e), e)
+      this.hours.set(e.h, hour)
+      hours.add(e.h)
+      this.dirtyMonths.add(monthOf(e.h))
+    }
+    if (hours.size) this.runHours.set(run, hours)
+    else this.runHours.delete(run)
     this.revision++
     return true
   }
@@ -215,7 +265,8 @@ export class Ledger {
     let kept = 0
     const count = (list: LedgerEntry[], s: string) => list.reduce((sum, e) => (e.s === s ? sum + e.n : sum), 0)
     for (const [h, fresh] of byHour) {
-      const prev = [...(this.hours.get(h)?.values() ?? [])]
+      // Background entries are not part of a rebuild; setHour keeps them.
+      const prev = [...(this.hours.get(h)?.values() ?? [])].filter((e) => !isBackground(e))
       const sessions = new Set([...prev, ...fresh].map((e) => e.s))
       const next: LedgerEntry[] = []
       for (const s of sessions) {

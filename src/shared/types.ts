@@ -608,8 +608,22 @@ export interface UsageStats {
   timeZone: string
   /** First day in the ledger (YYYY-MM-DD), if it has anything. */
   firstDay?: string
-  /** `webSearches`: server-side web searches made by the requests ($0.01 each, included in costUsd). */
-  totals: { tokens: TokenTotals; costUsd: number; requests: number; conversations: number; units: number; activeDays: number; webSearches: number }
+  /**
+   * `webSearches`: server-side web searches ($0.01 each, included in costUsd). `background`: the part of the
+   * totals that is Claude Code's background requests (compacting context, titles, web search, …), which never reach
+   * the transcripts and come from its cost-state records; show it as its own line. Background requests are not
+   * counted in `requests` (Claude Code does not say how many there were).
+   */
+  totals: {
+    tokens: TokenTotals
+    costUsd: number
+    requests: number
+    conversations: number
+    units: number
+    activeDays: number
+    webSearches: number
+    background: { tokens: TokenTotals; costUsd: number; webSearches: number }
+  }
   /** Independent of the range (same account filter): today so far, this calendar month, everything recorded. */
   fixed: { todayUsd: number; monthUsd: number; allTimeUsd: number }
   /** Every day of the range, oldest first, including empty days. */

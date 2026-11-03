@@ -11,7 +11,7 @@ import type { UsageEstimate } from '@shared/types'
 import type { UsageSample } from './desktop'
 import { readJson, writeJsonAtomic } from './jsonfile'
 import { projectsDir, qdPaths, safeReaddir } from './paths'
-import { costOf, tierOf, tokensOf, webSearchesOf, type ReplyUsage } from './pricing'
+import { costOf, priceOf, tierOf, tokensOf, WEB_SEARCH_USD, webSearchesOf, type ReplyUsage } from './pricing'
 
 const MIN = 60_000
 const HOUR = 60 * MIN
@@ -90,6 +90,39 @@ export interface UsageBucket {
   t: number
 }
 
+/** One run of a conversation as Claude Code reports it in its "cost-state" records (the latest record wins). */
+export interface CostStateRun {
+  s: string
+  /** The run's start (cost-state startTime). */
+  start: number
+  /** When the latest record was written: start + Claude Code's total duration of the run. */
+  at: number
+  total: number
+  /** Per model: input, output, cache read, cache write (5 min + 1 h together), web searches, Claude Code's dollars. */
+  usage: Record<string, { i: number; o: number; r: number; w: number; ws: number; c: number }>
+  file: string
+  /** The background part still has to be computed for this record. */
+  pending?: boolean
+}
+
+/**
+ * What Claude Code counted in a run beyond the requests its transcripts hold (compacting context, titles, web
+ * search, …): the latest cost-state minus the transcript's requests since the run started, per model, never below 0.
+ */
+export interface BackgroundRun {
+  /** "<session>@<start>". */
+  key: string
+  s: string
+  start: number
+  at: number
+  /** Where the run's requests came from, for attributing it like them. */
+  e?: 'd' | 'c'
+  models: Record<string, { i: number; o: number; r: number; w5: number; w1: number; ws: number }>
+  /** Token categories where the transcript held more than Claude Code counted (taken as 0). */
+  negatives: number
+  computedAt: number
+}
+
 export interface ScanOptions {
   /** Desktop organization signed in at a time, for attributing desktop replies. */
   orgAt?: OrgAt
@@ -97,10 +130,12 @@ export interface ScanOptions {
   deep?: boolean
   /** Buckets about to be dropped because they are older than a month; the ledger keeps them. */
   onDrop?: (buckets: UsageBucket[]) => void
+  /** Background parts of runs about to be dropped for the same reason. */
+  onDropBackground?: (runs: BackgroundRun[]) => void
 }
 
 interface ScanState {
-  version: 4
+  version: 5
   cursors: Record<string, { size: number }>
   events: UsageEvent[]
   /** Reply ids already counted (one reply spans several transcript lines), with their time for pruning. */
@@ -108,9 +143,15 @@ interface ScanState {
   buckets: Record<string, UsageBucket>
   /** Project folder (under ~/.claude/projects) of each session. */
   projects: Record<string, string>
+  /** Claude Code's cost-state per run, and the background part computed from it, by "<session>@<start>". */
+  runs: Record<string, CostStateRun>
+  background: Record<string, BackgroundRun>
   /** Every transcript was read at least once. */
   complete?: boolean
 }
+
+/** A run whose background part was computed this recently waits for the next record before reading it again. */
+const BACKGROUND_EVERY = 5 * MIN
 
 /** Desktop organization signed in at a given time, from the app's usage samples. */
 export type OrgAt = (t: number) => string | undefined
@@ -151,6 +192,77 @@ function transcriptFiles(cutoff: number): string[] {
 
 const yieldToLoop = () => new Promise<void>((r) => setImmediate(r))
 
+interface RunTokens {
+  i: number
+  o: number
+  r: number
+  w5: number
+  w1: number
+  ws: number
+  /** Dollars the way Claude Code prices them (its Sonnet 5.5 cache reads are $0.20), for splitting cache writes. */
+  cc: number
+}
+
+/** Requests of a run from its transcript and its subagents' (each once), per model, from the run's start on. */
+export async function readRunRequests(run: Pick<CostStateRun, 'file' | 'start'>): Promise<{ models: Record<string, RunTokens>; e?: 'd' | 'c' }> {
+  const session = path.basename(run.file, '.jsonl')
+  const subDir = path.join(path.dirname(run.file), session, 'subagents')
+  const files = [run.file, ...safeReaddir(subDir).filter((n) => n.endsWith('.jsonl')).map((n) => path.join(subDir, n))]
+  const models: Record<string, RunTokens> = {}
+  const seen = new Set<string>()
+  let e: 'd' | 'c' | undefined
+  for (const f of files) {
+    let text: string
+    try {
+      text = await fs.promises.readFile(f, 'utf8')
+    } catch {
+      continue
+    }
+    for (const line of text.split('\n')) {
+      if (!line.includes('"usage"') || !line.includes('"type":"assistant"')) continue
+      let j: { timestamp?: string; requestId?: string; entrypoint?: string; message?: { id?: string; model?: string; usage?: ReplyUsage } }
+      try {
+        j = JSON.parse(line)
+      } catch {
+        continue
+      }
+      const model = j.message?.model
+      const u = j.message?.usage
+      const t = Date.parse(j.timestamp ?? '')
+      if (!model || !u || model === '<synthetic>' || !Number.isFinite(t) || t < run.start) continue
+      const id = `${j.message!.id ?? ''}:${j.requestId ?? ''}`
+      if (seen.has(id)) continue
+      seen.add(id)
+      if (f === run.file && j.entrypoint) e = j.entrypoint === 'claude-desktop' ? 'd' : 'c'
+      const tok = tokensOf(u)
+      const m = (models[model] ??= { i: 0, o: 0, r: 0, w5: 0, w1: 0, ws: 0, cc: 0 })
+      m.i += tok.input
+      m.o += tok.output
+      m.r += tok.cacheRead
+      m.w5 += tok.write5m
+      m.w1 += tok.write1h
+      m.ws += webSearchesOf(u)
+      m.cc += costOf(u, model) + (/sonnet-5-5/i.test(model) ? (tok.cacheRead * 0.1) / 1e6 : 0)
+    }
+    await yieldToLoop()
+  }
+  return { models, e }
+}
+
+/**
+ * Claude Code reports cache writes as one number. The 5-minute / 1-hour split of the background part follows from
+ * its dollars: what it charged beyond the transcript's requests, minus everything else, is the 1-hour premium.
+ */
+function splitCacheWrite(model: string, d: { i: number; o: number; r: number; w: number; ws: number }, cc: { c: number }, ours: RunTokens | undefined): { w5: number; w1: number } {
+  if (!d.w) return { w5: 0, w1: 0 }
+  const p = priceOf(model)
+  const read = /sonnet-5-5/i.test(model) ? 0.2 : (p.cacheRead ?? p.input * 0.1)
+  const extra = cc.c - (ours?.cc ?? 0)
+  const rest = (d.i * p.input + d.o * p.output + d.r * read + d.w * p.input * 1.25) / 1e6 + d.ws * WEB_SEARCH_USD
+  const w1 = Math.round(Math.min(d.w, Math.max(0, ((extra - rest) * 1e6) / (p.input * 0.75))))
+  return { w5: d.w - w1, w1 }
+}
+
 export class UsageScanner {
   private state: ScanState
   private busy = false
@@ -162,8 +274,13 @@ export class UsageScanner {
 
   constructor(private readonly file = path.join(qdPaths().root, 'usage-scan.json')) {
     const saved = readJson<ScanState>(file)
-    // Older versions kept no statistics, or no price tiers; reading the transcripts again fills them in.
-    this.state = saved?.version === 4 ? saved : { version: 4, cursors: {}, events: [], seen: {}, buckets: {}, projects: {} }
+    // Older versions kept no statistics, price tiers or cost-state runs; reading the transcripts again fills them in.
+    this.state = saved?.version === 5 ? saved : { version: 5, cursors: {}, events: [], seen: {}, buckets: {}, projects: {}, runs: {}, background: {} }
+  }
+
+  /** Background parts of the runs seen in the last month. */
+  get backgroundRuns(): readonly BackgroundRun[] {
+    return Object.values(this.state.background)
   }
 
   get events(): readonly UsageEvent[] {
@@ -236,7 +353,19 @@ export class UsageScanner {
         this.state.complete = true
         touched = true
       }
+      // A run whose last record arrived while it was being waited on is computed now, even if nothing else changed.
+      const revisionBeforeBackground = this.revision
+      await this.computeBackground(now)
+      if (this.revision !== revisionBeforeBackground) touched = true
       if (!touched) return false
+      const droppedRuns: BackgroundRun[] = []
+      for (const [key, run] of Object.entries(this.state.runs)) {
+        if (run.at >= cutoff) continue
+        if (this.state.background[key]) droppedRuns.push(this.state.background[key])
+        delete this.state.runs[key]
+        delete this.state.background[key]
+      }
+      if (droppedRuns.length) opts.onDropBackground?.(droppedRuns)
       const keepEvents = now - KEEP
       this.state.events = this.state.events.filter((e) => e.t >= keepEvents).sort((a, b) => a.t - b.t)
       for (const [id, t] of Object.entries(this.state.seen)) if (t < cutoff) delete this.state.seen[id]
@@ -280,10 +409,68 @@ export class UsageScanner {
     this.revision++
   }
 
+  /** Keep the latest cost-state record of a run (Claude Code rewrites its running total during the run). */
+  private takeCostState(text: string, file: string, session: string, cutoff: number): void {
+    let j: { sessionId?: string; startTime?: number; totalCostUSD?: number; totalDuration?: number; modelUsage?: Record<string, Record<string, number>> }
+    try {
+      j = JSON.parse(text)
+    } catch {
+      return
+    }
+    if (typeof j.startTime !== 'number' || typeof j.totalCostUSD !== 'number' || !j.modelUsage) return
+    const at = j.startTime + (typeof j.totalDuration === 'number' && j.totalDuration > 0 ? j.totalDuration : 0)
+    if (at < cutoff) return
+    const s = j.sessionId ?? session
+    const key = `${s}@${j.startTime}`
+    const prev = this.state.runs[key]
+    if (prev && prev.total > j.totalCostUSD) return
+    if (prev && prev.total === j.totalCostUSD && prev.at >= at) return
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0)
+    const usage: CostStateRun['usage'] = {}
+    for (const [model, u] of Object.entries(j.modelUsage)) {
+      usage[model] = { i: num(u.inputTokens), o: num(u.outputTokens), r: num(u.cacheReadInputTokens), w: num(u.cacheCreationInputTokens), ws: num(u.webSearchRequests), c: num(u.costUSD) }
+    }
+    this.state.runs[key] = { s, start: j.startTime, at, total: j.totalCostUSD, usage, file, pending: true }
+  }
+
+  /**
+   * The background part of a run: the latest cost-state minus the requests its transcripts (and its subagents')
+   * hold since the run started. Reads the conversation's files once per new record, at most every 5 minutes.
+   */
+  private async computeBackground(now: number): Promise<void> {
+    for (const [key, run] of Object.entries(this.state.runs)) {
+      const done = this.state.background[key]
+      if (!run.pending || (done && now - done.computedAt < BACKGROUND_EVERY)) continue
+      const ours = await readRunRequests(run)
+      const models: BackgroundRun['models'] = {}
+      let negatives = 0
+      const diff = (a: number, b: number) => {
+        if (a < b) negatives++
+        return Math.max(0, a - b)
+      }
+      for (const [model, cc] of Object.entries(run.usage)) {
+        const o = ours.models[model] ?? { i: 0, o: 0, r: 0, w5: 0, w1: 0, ws: 0 }
+        const d = { i: diff(cc.i, o.i), o: diff(cc.o, o.o), r: diff(cc.r, o.r), w: diff(cc.w, o.w5 + o.w1), ws: diff(cc.ws, o.ws) }
+        if (!d.i && !d.o && !d.r && !d.w && !d.ws) continue
+        models[model] = { i: d.i, o: d.o, r: d.r, ...splitCacheWrite(model, d, cc, o), ws: d.ws }
+      }
+      // Requests the transcript holds for a model Claude Code did not list count as negative differences too.
+      for (const model of Object.keys(ours.models)) if (!run.usage[model]) negatives++
+      this.state.background[key] = { key, s: run.s, start: run.start, at: run.at, e: ours.e, models, negatives, computedAt: now }
+      run.pending = false
+      this.revision++
+      await yieldToLoop()
+    }
+  }
+
   /** Count one transcript line; returns its timestamp when it has one. */
-  private take(line: Buffer, cutoff: number, session: string): number | undefined {
+  private take(line: Buffer, cutoff: number, session: string, file: string): number | undefined {
     if (line.length < 40) return undefined
     const text = line.toString('utf8')
+    if (text.includes('"type":"cost-state"')) {
+      this.takeCostState(text, file, session, cutoff)
+      return undefined
+    }
     const ts = /"timestamp":"([^"]+)"/.exec(text)
     const t = ts ? Date.parse(ts[1]) : NaN
     if (!text.includes('"usage"') || !text.includes('"type":"assistant"')) return Number.isFinite(t) ? t : undefined
@@ -339,7 +526,7 @@ export class UsageScanner {
         if (start === 0) parts.unshift(first)
         let oldest = Infinity
         for (let i = parts.length - 1; i >= 0; i--) {
-          const t = this.take(parts[i], cutoff, session)
+          const t = this.take(parts[i], cutoff, session, file)
           if (t !== undefined && t < oldest) oldest = t
         }
         if (oldest < cutoff) break
@@ -359,7 +546,7 @@ export class UsageScanner {
       await fd.read(buf, 0, buf.length, from)
       const nl = buf.lastIndexOf(0x0a)
       if (nl === -1) return from
-      for (const line of splitLines(buf.subarray(0, nl))) this.take(line, cutoff, session)
+      for (const line of splitLines(buf.subarray(0, nl))) this.take(line, cutoff, session, file)
       return from + nl + 1
     } finally {
       await fd.close()

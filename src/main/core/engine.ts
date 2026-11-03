@@ -45,7 +45,7 @@ import { tr, windowName } from '../i18n'
 import { authStatus, envForConfigDir, extractUrl, findClaude, mainOauthAccount, readOauthAccount, startOfficialLogin, type LoginHandle } from './claudeCli'
 import { accountFolder, findDesktopDataDir, isDesktopRunning, listAccountFolders, readSessions, readUsageSamples, sessionFileNames, type AccountFolder, type UsageSample } from './desktop'
 import { computeEta } from './eta'
-import { attribute, estimateUsage, UsageScanner, type UsageBucket } from './estimate'
+import { attribute, estimateUsage, unitsOf, UsageScanner, type BackgroundRun, type UsageBucket } from './estimate'
 import { safeFileName, transcriptToMarkdown } from './exportMd'
 import { listTranscripts, saveHistoryCache, type TranscriptMeta } from './history'
 import { entriesFrom, Ledger, type LedgerEntry } from './ledger'
@@ -62,7 +62,7 @@ import { computeStats, ledgerCsv, type AccountLabel } from './stats'
 import { renderStatusLine } from './statusline'
 import { loadState, saveStateNow, saveStateSoon, type PersistedState } from './store'
 import { compareVersions, fetchLatestRelease } from './updates'
-import { PRICE_LIST_DATE } from './pricing'
+import { costOfTokens, PRICE_LIST_DATE } from './pricing'
 
 const MIN = 60_000
 const HOUR = 60 * MIN
@@ -271,7 +271,8 @@ export class Engine extends EventEmitter {
       await this.scanner.scan(Date.now(), {
         orgAt: this.orgAt,
         deep: true,
-        onDrop: (old) => (rebuilding ? absorb(this.ledger.rebuild(rows(old))) : this.ledger.sync(rows(old), Date.now(), false))
+        onDrop: (old) => (rebuilding ? absorb(this.ledger.rebuild(rows(old))) : this.ledger.sync(rows(old), Date.now(), false)),
+        onDropBackground: (runs) => this.syncBackground(runs)
       })
       if (this.scanner.complete) {
         if (rebuilding) {
@@ -1316,9 +1317,34 @@ export class Engine extends EventEmitter {
     return out
   }
 
+  /**
+   * Claude Code's background requests per run (what its cost-state counted beyond the transcripts), as ledger
+   * entries in the hour of the run's latest record, attributed like the run's own requests. Replaced per run.
+   */
+  private syncBackground(runs: Iterable<BackgroundRun> = this.scanner.backgroundRuns): boolean {
+    const of = this.bucketAccounts()
+    const orgs = this.originalOrgs()
+    let changed = false
+    for (const bg of runs) {
+      const h = Math.floor(bg.at / HOUR) * HOUR
+      const g = this.orgAt(bg.at) ?? (bg.e !== 'c' ? orgs.get(bg.s) : undefined)
+      const a = of({ h, s: bg.s, e: bg.e, g, m: '', u: 0, n: 0, i: 0, o: 0, r: 0, w5: 0, w1: 0, c: 0, t: bg.at })
+      const entries: LedgerEntry[] = Object.entries(bg.models).map(([m, t]) => {
+        const e: LedgerEntry = { h, a, g: a ? undefined : g, s: bg.s, m, k: 'b', run: bg.key, i: t.i, o: t.o, w5: t.w5, w1: t.w1, r: t.r, n: 0, ws: t.ws || undefined, c: 0, u: 0, t: bg.at }
+        e.c = costOfTokens(m, '', e, t.ws)
+        e.u = unitsOf({ input_tokens: t.i, output_tokens: t.o, cache_read_input_tokens: t.r, cache_creation_input_tokens: t.w5 + t.w1, cache_creation: { ephemeral_5m_input_tokens: t.w5, ephemeral_1h_input_tokens: t.w1 } }, m)
+        return e
+      })
+      changed = this.ledger.setBackground(bg.key, entries) || changed
+    }
+    return changed
+  }
+
   /** Mirror the scanner's month of buckets into the ledger, and keep account names and conversation titles. */
   private syncLedger(): void {
-    const changed = this.ledger.sync(entriesFrom(this.withOrgs(Object.values(this.scanner.buckets)), this.bucketAccounts()), Date.now(), true)
+    const requests = this.ledger.sync(entriesFrom(this.withOrgs(Object.values(this.scanner.buckets)), this.bucketAccounts()), Date.now(), true)
+    const background = this.syncBackground()
+    const changed = requests || background
     for (const a of this.s.accounts) this.ledger.setAccount(a.id, { email: a.email, nickname: a.nickname, plan: a.plan?.label })
     if (changed || Date.now() - this.lastLedgerMetaAt > 10 * MIN) {
       this.lastLedgerMetaAt = Date.now()
@@ -1493,7 +1519,8 @@ export class Engine extends EventEmitter {
     const csv = ledgerCsv(
       this.ledger.entries(),
       { range: query.range, accountId: query.accountId ?? 'all', now: Date.now(), timeZone: this.settings.timezone, accountOf: this.ledgerRows(), accountLabel: this.accountLabel },
-      this.t('csv.header').split('|')
+      this.t('csv.header').split('|'),
+      { request: this.t('csv.kind.request'), background: this.t('csv.kind.background') }
     )
     const day = new Intl.DateTimeFormat('en-CA', { timeZone: resolveTimeZone(this.settings.timezone), year: 'numeric', month: '2-digit', day: '2-digit' }).format(Date.now())
     return { csv, fileName: this.t('csv.fileName', { day }) }
