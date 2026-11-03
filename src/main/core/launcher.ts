@@ -111,10 +111,16 @@ function shellScript(req: LaunchRequest, cwd: string): string {
   ].join('\n')
 }
 
+/** iTerm2 installs as iTerm.app in /Applications or ~/Applications. */
+export function hasITerm(): boolean {
+  return ['/Applications/iTerm.app', path.join(HOME, 'Applications', 'iTerm.app')].some((p) => exists(p))
+}
+
 async function launchMac(req: LaunchRequest, cwd: string): Promise<void> {
   const file = scriptPath('.command')
   fs.writeFileSync(file, shellScript(req, cwd) + '\n', { mode: 0o755 })
-  const app = req.terminal === 'iterm' ? 'iTerm' : 'Terminal'
+  // Terminal.app is always there; iTerm only when it is installed.
+  const app = req.terminal === 'iterm' && hasITerm() ? 'iTerm' : 'Terminal'
   spawnDetached('open', ['-a', app, file], cwd)
 }
 

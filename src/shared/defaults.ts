@@ -39,6 +39,8 @@ export function defaultSettings(systemLocale = 'en'): Settings {
     soundVolume: 0.5,
     uiStyle: 'swiss',
     accent: 'ikb',
-    trayShowPercent: true
+    trayShowPercent: true,
+    globalShortcut: 'CommandOrControl+Shift+Q',
+    autoCheckUpdates: true
   }
 }

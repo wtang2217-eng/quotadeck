@@ -18,6 +18,13 @@ function startAppsId(): Promise<string | undefined> {
 
 let cachedId: string | undefined
 
+const MAC_BUNDLE_ID = 'com.anthropic.claudefordesktop'
+
+/** `open` exits non-zero when it cannot find the app, so this tells whether the desktop app is installed. */
+function openMac(args: string[]): Promise<boolean> {
+  return new Promise((resolve) => execFile('open', args, { timeout: 8000 }, (err) => resolve(!err)))
+}
+
 export async function openClaudeDesktop(): Promise<boolean> {
   if (IS_WIN) {
     const local = process.env.LOCALAPPDATA || path.join(HOME, 'AppData', 'Local')
@@ -32,8 +39,8 @@ export async function openClaudeDesktop(): Promise<boolean> {
       return true
     }
   } else if (IS_MAC) {
-    spawn('open', ['-a', 'Claude'], { detached: true, stdio: 'ignore' }).unref()
-    return true
+    // By name first, then by bundle id (the app may have been renamed), then the URL scheme below.
+    if ((await openMac(['-a', 'Claude'])) || (await openMac(['-b', MAC_BUNDLE_ID]))) return true
   }
   try {
     await shell.openExternal('claude://')

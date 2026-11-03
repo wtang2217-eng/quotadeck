@@ -2,8 +2,8 @@
 // Query parameters for previewing states: ?lang=en ?theme=dark ?style=swiss|editorial|eclipse ?accent=ikb|lemon|green|orange ?empty=1 ?conflict=1 ?warn=1 ?dup=1 ?ratio=1 ?page=settings ?dialog=switch|add ?still=1
 
 import type { QuotaDeckApi } from '@shared/api'
-import { demoConversations, demoState } from '@shared/demo'
-import type { ActivityEvent, AppState, Language, LoginProgress, MergeStatus, Page, Settings, UiCommand } from '@shared/types'
+import { demoConversations, demoProjects, demoSetupStatus, demoState, demoStats } from '@shared/demo'
+import type { ActivityEvent, AppState, Language, LoginProgress, MergeStatus, Page, PendingSwitch, Settings, SetupProgress, UiCommand } from '@shared/types'
 
 type Listener<T> = (v: T) => void
 
@@ -281,6 +281,108 @@ export function createMockApi(): QuotaDeckApi {
         /* clipboard may be blocked in the preview */
       }
       log('copyText', text)
+    },
+
+    // ---- v0.2 features (state and listeners are declared below the object)
+    async cancelPendingSwitch() {
+      state.pendingSwitch = undefined
+      emit()
+      return clone(state)
+    },
+    onSwitchProgress(cb: Listener<PendingSwitch>) {
+      switchL.add(cb)
+      return () => switchL.delete(cb)
+    },
+    async openInDesktop(target: { cliSessionId?: string; desktopSessionId?: string }) {
+      log('openInDesktop', target)
+      return { ok: true }
+    },
+    async listProjects() {
+      await wait(80)
+      return demoProjects(lang)
+    },
+    async setFavorite(cliSessionId: string, favorite: boolean) {
+      if (favorite) favorites.add(cliSessionId)
+      else favorites.delete(cliSessionId)
+      log('setFavorite', cliSessionId, favorite)
+    },
+    async exportConversation(cliSessionId: string) {
+      await wait(300)
+      log('exportConversation', cliSessionId)
+      return { ok: true, path: 'C:\\Users\\alice\\Documents\\demo.md' }
+    },
+    async getStats(query: { range: '7d' | '30d'; accountId?: string }) {
+      await wait(160)
+      return demoStats(lang, query.range, query.accountId)
+    },
+    async getSetupStatus() {
+      await wait(120)
+      return demoSetupStatus(lang, state.needsSetup)
+    },
+    async runSetup(opts: { installCli: boolean; connectIntegration: boolean; openAtLogin: boolean }) {
+      const runId = `mock-setup-${Date.now()}`
+      const send = (p: Omit<SetupProgress, 'runId'>, ms: number) => window.setTimeout(() => setupL.forEach((cb) => cb({ runId, ...p })), ms)
+      const zh = lang === 'zh-CN'
+      let t = 200
+      if (opts.installCli) {
+        send({ step: 'cli', phase: 'running', message: zh ? '正在用官方安装脚本安装 Claude Code…' : 'Installing Claude Code with the official installer…' }, t)
+        send({ step: 'cli', phase: 'running', message: 'Setting up Claude Code...' }, (t += 1200))
+        send({ step: 'cli', phase: 'ok', message: zh ? '已安装 2.1.283' : 'Installed 2.1.283' }, (t += 1200))
+      }
+      send({ step: 'main-account', phase: 'ok', message: zh ? '已加入 主号' : 'Added Main' }, (t += 600))
+      if (opts.connectIntegration) send({ step: 'integration', phase: 'ok', message: zh ? '已接入' : 'Connected' }, (t += 600))
+      send({ step: 'open-at-login', phase: opts.openAtLogin ? 'ok' : 'skipped' }, (t += 400))
+      window.setTimeout(() => {
+        state.needsSetup = false
+        if (opts.openAtLogin) state.settings.openAtLogin = true
+        setupL.forEach((cb) => cb({ runId, phase: 'done', ok: true, status: demoSetupStatus(lang, false) }))
+        emit()
+      }, t + 400)
+      log('runSetup', opts)
+      return { runId }
+    },
+    onSetupProgress(cb: Listener<SetupProgress>) {
+      setupL.add(cb)
+      return () => setupL.delete(cb)
+    },
+    async dismissSetup() {
+      state.needsSetup = false
+      emit()
+      return clone(state)
+    },
+    async checkForUpdates() {
+      await wait(500)
+      return clone(state.update ?? { current: state.appVersion, available: false, checkedAt: Date.now() })
+    }
+  }
+
+  // ---- v0.2 features. Preview states: ?setup=1 (first start) ?update=1 (new version) ?switch=waiting|done
+  const switchL = new Set<Listener<PendingSwitch>>()
+  const setupL = new Set<Listener<SetupProgress>>()
+  const favorites = new Set(demoConversations(lang).filter((c) => c.favorite).map((c) => c.cliSessionId))
+  if (params.get('setup') === '1') state.needsSetup = true
+  if (params.get('update') === '1') {
+    state.update = {
+      current: state.appVersion,
+      latest: '0.3.0',
+      available: true,
+      url: 'https://github.com/wtang2217-eng/quotadeck/releases/latest',
+      notes: lang === 'zh-CN' ? '新增：托盘小窗、用量统计、对话导出' : 'New: tray popover, usage statistics, conversation export',
+      checkedAt: Date.now()
+    }
+  }
+  const previewSwitch = params.get('switch')
+  if (previewSwitch === 'waiting' || previewSwitch === 'done') {
+    const conv = demoConversations(lang)[0]
+    state.pendingSwitch = {
+      id: 'mock-switch',
+      fromAccountId: state.accounts[1]?.id,
+      toAccountId: state.accounts[0]?.id ?? '',
+      conversation: { cliSessionId: conv.cliSessionId, desktopSessionId: conv.desktopSessionId, title: conv.title, cwd: conv.cwd, inTargetList: true },
+      startedAt: Date.now() - 2 * 60_000,
+      phase: previewSwitch,
+      finishedAt: previewSwitch === 'done' ? Date.now() - 20_000 : undefined,
+      copiedPrompt: previewSwitch === 'done'
     }
   }
 

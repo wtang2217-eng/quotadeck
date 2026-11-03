@@ -1,10 +1,13 @@
-import { Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
+import { Menu, nativeImage, Tray, type MenuItemConstructorOptions, type Rectangle } from 'electron'
 import { accountName, formatClock } from '@shared/format'
 import type { AccountView, AppState } from '@shared/types'
+import { menuBarTitle } from './core/menuBarTitle'
 import { tr } from './i18n'
 
 export interface TrayActions {
   open(): void
+  /** Left click: show or hide the small popover next to the icon. */
+  togglePopover(bounds: Rectangle): void
   quit(): void
   openSwitch(toAccountId?: string): void
   addAccount(): void
@@ -12,21 +15,32 @@ export interface TrayActions {
   mergeNow(): void
 }
 
-type TrayLook = 'idle' | 'ok' | 'warn' | 'limited'
+export type TrayLook = 'idle' | 'ok' | 'warn' | 'limited'
+
+const IS_MAC = process.platform === 'darwin'
 
 export class TrayController {
   private tray: Tray
   private look: TrayLook | undefined
   private timer: NodeJS.Timeout | undefined
   private pending: AppState | undefined
+  private menu: Menu | undefined
+  private title = ''
 
+  /** iconFor gets 'template' on macOS (one monochrome icon that follows the menu bar's color). */
   constructor(
-    private readonly iconFor: (look: TrayLook) => string,
+    private readonly iconFor: (look: TrayLook | 'template') => string,
     private readonly actions: TrayActions
   ) {
-    this.tray = new Tray(nativeImage.createFromPath(iconFor('idle')))
+    this.tray = new Tray(nativeImage.createFromPath(iconFor(IS_MAC ? 'template' : 'idle')))
     this.tray.setToolTip('QuotaDeck')
-    this.tray.on('click', () => actions.open())
+    this.tray.on('click', (_e, bounds) => actions.togglePopover(bounds))
+    // macOS shows a context menu set with setContextMenu on every click, so it is opened by hand on right click.
+    if (IS_MAC) this.tray.on('right-click', () => this.menu && this.tray.popUpContextMenu(this.menu))
+  }
+
+  getBounds(): Rectangle {
+    return this.tray.getBounds()
   }
 
   /** Coalesce bursts of state updates. */
@@ -61,9 +75,17 @@ export class TrayController {
     const lang = state.settings.language
     const focus = this.focusAccount(state)
     const look: TrayLook = !focus ? 'idle' : focus.status === 'limited' ? 'limited' : focus.status === 'warn' ? 'warn' : focus.status === 'ok' ? 'ok' : 'idle'
-    if (look !== this.look) {
+    if (!IS_MAC && look !== this.look) {
       this.tray.setImage(nativeImage.createFromPath(this.iconFor(look)))
       this.look = look
+    }
+    if (IS_MAC) {
+      const desktop = state.accounts.find((a) => a.isDesktopCurrent) ?? focus
+      const title = menuBarTitle(state, desktop)
+      if (title !== this.title) {
+        this.tray.setTitle(title, { fontType: 'monospacedDigit' })
+        this.title = title
+      }
     }
     this.tray.setToolTip(focus ? `QuotaDeck\n${accountName(focus)} · ${this.usageText(state, focus)}` : 'QuotaDeck')
 
@@ -84,6 +106,7 @@ export class TrayController {
     if (state.merge.eligibleAccounts > 1) items.push({ label: tr(lang, 'tray.merge'), click: () => this.actions.mergeNow() })
     items.push({ label: tr(lang, 'tray.add'), click: () => this.actions.addAccount() })
     items.push({ type: 'separator' }, { label: tr(lang, 'tray.open'), click: () => this.actions.open() }, { label: tr(lang, 'tray.quit'), click: () => this.actions.quit() })
-    this.tray.setContextMenu(Menu.buildFromTemplate(items))
+    this.menu = Menu.buildFromTemplate(items)
+    if (!IS_MAC) this.tray.setContextMenu(this.menu)
   }
 }

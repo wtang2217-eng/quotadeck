@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36">
+  <!-- macOS menu bar icon (a template image: only the alpha counts, the system colors it). The eclipse:
+       a lit crescent where the moon leaves the sun uncovered, inside a faint corona ring. -->
+  <defs>
+    <mask id="moon">
+      <rect width="36" height="36" fill="#fff"/>
+      <circle cx="15.4" cy="15.4" r="10.2" fill="#000"/>
+    </mask>
+  </defs>
+  <circle cx="18" cy="18" r="15.6" fill="none" stroke="#000" stroke-width="2.2" opacity="0.42"/>
+  <circle cx="19.4" cy="19.4" r="10.8" fill="#000" mask="url(#moon)"/>
+</svg>

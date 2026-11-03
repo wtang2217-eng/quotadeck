@@ -102,12 +102,15 @@ export function desktopDataDirCandidates(): string[] {
     for (const pkg of safeReaddir(packages)) {
       if (/^Claude_/i.test(pkg)) roots.push(path.join(packages, pkg, 'LocalCache', 'Roaming', 'Claude'))
     }
-  } else if (IS_MAC) {
-    const support = path.join(HOME, 'Library', 'Application Support')
-    roots.push(path.join(support, 'Claude'), path.join(support, 'Claude-3p'))
   } else {
-    const config = process.env.XDG_CONFIG_HOME || path.join(HOME, '.config')
-    roots.push(path.join(config, 'Claude'), path.join(config, 'Claude-3p'))
+    // The app names its folder Claude, Claude-Data or Claude-3p; newer builds may keep it one level down.
+    const base = IS_MAC ? path.join(HOME, 'Library', 'Application Support') : process.env.XDG_CONFIG_HOME || path.join(HOME, '.config')
+    roots.push(path.join(base, 'Claude'))
+    for (const name of ['Claude-Data', 'Claude-3p']) {
+      const dir = path.join(base, name)
+      roots.push(dir)
+      for (const child of safeReaddir(dir)) roots.push(path.join(dir, child))
+    }
   }
   const scored = roots
     .filter((dir) => exists(path.join(dir, 'claude-code-sessions')) || exists(path.join(dir, 'plan-usage-history.json')))

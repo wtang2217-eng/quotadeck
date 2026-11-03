@@ -108,4 +108,22 @@ describe('UsageScanner', () => {
     await again.scan(now)
     expect(again.events).toHaveLength(3)
   })
+
+  it('keeps hourly totals with tokens, cost and the desktop organization for the statistics', async () => {
+    const now = Date.now()
+    const file = path.join(dir, 'claude', 'projects', 'p', 's1.jsonl')
+    fs.writeFileSync(file, [line('m1', now - 60_000, 1_000_000), line('m1', now - 60_000, 1_000_000), line('m2', now - 30_000, 1_000_000), ''].join('\n'))
+    const scanner = new UsageScanner(path.join(dir, 'scan.json'))
+    await scanner.scan(now, () => ORG_A)
+    const buckets = Object.values(scanner.buckets)
+    const sum = (k: 'o' | 'c' | 'n' | 'u') => buckets.reduce((s, b) => s + b[k], 0)
+    expect(sum('n')).toBe(2)
+    expect(sum('o')).toBe(2_000_000)
+    // Sonnet 5.5 output is $10 per million tokens.
+    expect(sum('c')).toBeCloseTo(20)
+    expect(sum('u')).toBeCloseTo(10)
+    expect(buckets.every((b) => b.g === ORG_A && b.s === 's1' && b.e === 'd' && b.h % HOUR === 0)).toBe(true)
+    expect(scanner.projectOf('s1')).toBe('p')
+    expect(scanner.complete).toBe(true)
+  })
 })
