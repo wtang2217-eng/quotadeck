@@ -221,6 +221,15 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.dt-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dt-sub-row .tag {
+  height: 18px;
+  font-size: 11px;
+}
 .dt-text {
   font-size: 13px;
   color: var(--text-2);

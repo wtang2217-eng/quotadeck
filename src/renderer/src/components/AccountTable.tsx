@@ -8,7 +8,7 @@ import { displayName, pctLevel, planText, shownPct, statusKey } from '../util'
 import { IconFolder, IconLogin, IconMonitor, IconMore, IconPencil, IconTerminal, IconTrash } from './icons'
 import { Menu } from './Menu'
 
-const COLS = 'minmax(150px, 1.5fr) 72px minmax(132px, 1.2fr) minmax(132px, 1.2fr) 76px 92px 128px'
+const COLS = 'minmax(200px, 1.8fr) minmax(132px, 1.2fr) minmax(132px, 1.2fr) 76px 92px 128px'
 
 function estimateTip(est: UsageEstimate | undefined, usage: UsageSnapshot | undefined, recorded: UsageWindow | undefined, t: T, clock: (ts: number) => string): string | undefined {
   if (!est) return undefined
@@ -95,7 +95,6 @@ export function AccountTable({ accounts, onScope }: { accounts: AccountView[]; o
     <div className="dt" role="table" style={{ ['--cols' as string]: COLS }}>
       <div className="dt-row dt-head" role="row">
         <span>{t('colAccount')}</span>
-        <span>{t('colPlan')}</span>
         <span>{t('fiveHour')}</span>
         <span>{t('sevenDay')}</span>
         <span>{t('colEta')}</span>
@@ -129,6 +128,9 @@ export function AccountTable({ accounts, onScope }: { accounts: AccountView[]; o
                   ) : (
                     <span className="ellipsis">{displayName(a)}</span>
                   )}
+                </div>
+                <div className="dt-sub dt-sub-row">
+                  <span className="ellipsis">{a.nickname && a.email ? `${planText(a.plan, t)} · ${a.email}` : planText(a.plan, t)}</span>
                   {a.isDesktopCurrent && (
                     <span className="tag tag-accent">
                       <IconMonitor size={12} />
@@ -136,9 +138,7 @@ export function AccountTable({ accounts, onScope }: { accounts: AccountView[]; o
                     </span>
                   )}
                 </div>
-                <div className="dt-sub">{a.nickname ? a.email : a.displayName || ''}</div>
               </div>
-              <span className="dt-text">{planText(a.plan, t)}</span>
               <MeterCell
                 w={u?.fiveHour}
                 estimatePct={est?.fiveHour}

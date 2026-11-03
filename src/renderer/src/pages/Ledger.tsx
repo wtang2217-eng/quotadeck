@@ -10,7 +10,7 @@ import { Segmented } from '../components/ui'
 import { useApp } from '../context'
 import { play } from '../sound'
 import { useStats } from '../useStats'
-import { errMessage, formatTokens, formatUsd, formatUsdAxis, sumTokens } from '../util'
+import { errMessage, formatTokens, formatUsd, formatUsdAxis, shortLabel, sumTokens } from '../util'
 
 type Group = 'account' | 'model' | 'project'
 const RANGES: { value: StatsRange; key: 'rangeToday' | 'range7' | 'range30' | 'range90' | 'rangeAll' }[] = [
@@ -71,7 +71,7 @@ function OrgName({ row }: { row: StatsAccount }) {
           void save(value)
         }}
       >
-        <input className="input" autoFocus value={value} maxLength={40} placeholder={t('orgDefault')} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setEditing(false)} />
+        <input className="input" autoFocus value={value} maxLength={60} placeholder={t('orgRenamePlaceholder')} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setEditing(false)} />
         <button type="submit" className="icon-btn" aria-label={t('save')}>
           <IconCheck />
         </button>
@@ -200,7 +200,8 @@ function LedgerBody({ stats, group }: { stats: UsageStats; group: Group }) {
     let k = 0
     return stats.byAccount.map((r) => ({
       id: r.accountId,
-      label: r.label,
+      label: shortLabel(r.label),
+      title: r.label,
       color: r.accountId && r.accountId === currentId ? 'var(--accent)' : SERIES_COLORS[Math.min(SERIES_COLORS.length - 1, k++)]
     }))
   }, [stats, group, currentId])
@@ -313,7 +314,7 @@ function LedgerBody({ stats, group }: { stats: UsageStats; group: Group }) {
                     <span className="ellipsis">{r.label}</span>
                   </div>
                 )}
-                {r.email && r.kind === 'account' && <div className="dt-sub">{r.email}</div>}
+                {r.email && r.kind === 'account' && r.email !== r.label && <div className="dt-sub">{r.email}</div>}
               </div>
               <span className="dt-num r">{formatTokens(r.tokens.input)}</span>
               <span className="dt-num r">{formatTokens(r.tokens.output)}</span>

@@ -4,7 +4,10 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 export interface Series {
   id: string
+  /** Short name for the legend and the hover card. */
   label: string
+  /** Full name, shown on hover. */
+  title?: string
   /** CSS color, usually a token such as var(--accent). */
   color: string
 }
@@ -149,7 +152,7 @@ export function Legend({ series }: { series: Series[] }) {
   return (
     <div className="legend">
       {series.map((s) => (
-        <span key={s.id} className="legend-item">
+        <span key={s.id} className="legend-item" title={s.title}>
           <span className="legend-swatch" style={{ background: s.color }} />
           {s.label}
         </span>

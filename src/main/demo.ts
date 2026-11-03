@@ -176,7 +176,7 @@ export class DemoBackend extends EventEmitter implements Backend {
       send({ step: 'cli', phase: 'running', message: 'Setting up Claude Code...' }, (t += 900))
       send({ step: 'cli', phase: 'ok', message: zh ? '已安装 2.1.283' : 'Installed 2.1.283' }, (t += 900))
     }
-    send({ step: 'main-account', phase: 'ok', message: zh ? '已加入 主号' : 'Added Main' }, (t += 500))
+    send({ step: 'main-account', phase: 'ok', message: zh ? '已加入 alice.chen@example.com' : 'Added alice.chen@example.com' }, (t += 500))
     if (opts.connectIntegration) send({ step: 'integration', phase: 'ok', message: zh ? '已接入' : 'Connected' }, (t += 500))
     send({ step: 'open-at-login', phase: opts.openAtLogin ? 'ok' : 'skipped' }, (t += 300))
     setTimeout(() => {

@@ -5,7 +5,7 @@ import { formatAgo } from '@shared/format'
 import type { Page } from '@shared/types'
 import { useApp } from '../context'
 import type { TKey } from '../i18n'
-import { displayName, planText } from '../util'
+import { displayName, initial, planText, shortName } from '../util'
 import {
   IconBell,
   IconCheck,
@@ -62,7 +62,7 @@ function ScopeSwitcher() {
     ...state.accounts.map((a) => ({
       label: displayName(a),
       detail: `${planText(a.plan, t)}${a.email && a.nickname ? ` · ${a.email}` : ''}`,
-      icon: <span className="scope-mark sm">{Array.from(displayName(a))[0]}</span>,
+      icon: <span className="scope-mark sm">{initial(a)}</span>,
       sub: (
         <>
           {a.status === 'limited' && <span className="dot bad" />}
@@ -83,11 +83,11 @@ function ScopeSwitcher() {
         label={t('scopeHeading')}
         items={items}
         trigger={({ open, toggle }) => (
-          <button type="button" className="scope-btn" aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
-            <span className="scope-mark">{current ? Array.from(displayName(current))[0] : <IconLayers />}</span>
+          <button type="button" className="scope-btn" aria-haspopup="menu" aria-expanded={open} title={current ? displayName(current) : undefined} onClick={toggle}>
+            <span className="scope-mark">{current ? initial(current) : <IconLayers />}</span>
             <span className="scope-text">
               <span className="scope-label">{t('scopeHeading')}</span>
-              <span className="scope-name ellipsis">{current ? displayName(current) : t('scopeAll')}</span>
+              <span className="scope-name ellipsis">{current ? shortName(current) : t('scopeAll')}</span>
             </span>
             <IconChevronsUpDown size={14} />
           </button>
@@ -126,10 +126,10 @@ export function Sidebar() {
         <button type="button" className="side-row" onClick={() => navigate('dashboard')}>
           <IconMonitor />
           <span>{t('sideDesktop')}</span>
-          <span className={`side-value${desktop ? '' : ' muted'}`}>
+          <span className={`side-value${desktop ? '' : ' muted'}`} title={desktop ? displayName(desktop) : undefined}>
             {desktop?.status === 'limited' && <span className="dot bad" />}
             {desktop?.status === 'warn' && <span className="dot warn" />}
-            <span className="ellipsis">{desktop ? displayName(desktop) : state.desktop.found ? t('sideDesktopIdle') : t('sideDesktopNone')}</span>
+            <span className="ellipsis">{desktop ? shortName(desktop) : state.desktop.found ? t('sideDesktopIdle') : t('sideDesktopNone')}</span>
           </span>
         </button>
         <button type="button" className="side-row" onClick={() => navigate('settings')}>

@@ -132,11 +132,22 @@ export function displayName(a: AccountView | undefined): string {
   return a ? accountName(a) : '—'
 }
 
-/** First visible character for an avatar. */
+/** First letter for an avatar: the email's first letter. */
 export function initial(a: Pick<AccountView, 'nickname' | 'email' | 'displayName' | 'id'>): string {
-  const name = a.nickname || a.displayName || a.email || a.id
+  const name = a.email || a.nickname || a.displayName || a.id
   const ch = Array.from(name.trim())[0] ?? '?'
   return ch.toUpperCase()
+}
+
+/** For narrow places: the name the user gave, else the part of the email before "@". Show the full name on hover. */
+export function shortName(a: AccountView | undefined): string {
+  if (!a) return '—'
+  return a.nickname || (a.email ? a.email.split('@')[0] : a.displayName || a.id.slice(0, 8))
+}
+
+/** Same for a ledger label, which is the nickname or the email. */
+export function shortLabel(label: string): string {
+  return label.includes('@') ? label.split('@')[0] : label
 }
 
 export function remaining(w: UsageWindow | undefined): number | undefined {
@@ -245,7 +256,7 @@ export function formatUsdAxis(n: number): string {
   return `$${Math.round(n)}`
 }
 
-/** A space between Chinese and Latin letters or digits, as Chinese typesetting expects ("副号的 5 小时"). */
+/** A space between Chinese and Latin letters or digits, as Chinese typesetting expects ("的 5 小时额度"). */
 export function cjkSpace(s: string): string {
   return s.replace(/([一-鿿])([0-9A-Za-z])/g, '$1 $2').replace(/([0-9A-Za-z%])([一-鿿])/g, '$1 $2')
 }

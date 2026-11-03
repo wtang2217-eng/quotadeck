@@ -7,7 +7,7 @@ import { MeterCell } from '../components/AccountTable'
 import { IconArrowRight, Logo } from '../components/icons'
 import { Ctx, type AppCtx } from '../context'
 import { makeT } from '../i18n'
-import { displayName, resolveTheme } from '../util'
+import { displayName, resolveTheme, shortName } from '../util'
 
 export function TrayView({ api }: { api: QuotaDeckApi }) {
   const [state, setState] = useState<AppState | null>(null)
@@ -61,12 +61,16 @@ export function TrayView({ api }: { api: QuotaDeckApi }) {
           <Logo size={18} />
           <span className="tray-title">QuotaDeck</span>
           <span className="grow" />
-          <span className="tray-sub">{current ? `${t('sideDesktop')} · ${displayName(current)}` : t('sideDesktopIdle')}</span>
+          <span className="tray-sub" title={current ? displayName(current) : undefined}>
+            {current ? `${t('sideDesktop')} · ${shortName(current)}` : t('sideDesktopIdle')}
+          </span>
         </div>
         <div className="tray-list">
           {state.accounts.map((a) => (
             <div key={a.id} className={`tray-row${a.isDesktopCurrent ? ' is-current' : ''}`}>
-              <div className="tray-name ellipsis">{displayName(a)}</div>
+              <div className="tray-name ellipsis" title={displayName(a)}>
+                {shortName(a)}
+              </div>
               <MeterCell w={a.usage?.fiveHour} estimatePct={a.estimate?.fiveHour} estimateResetsAt={a.estimate?.fiveHourResetsAt} limitResetsAt={a.limit?.kind === 'session' ? a.limit.resetsAt : undefined} />
               <MeterCell w={a.usage?.sevenDay} estimatePct={a.estimate?.sevenDay} limitResetsAt={a.limit?.kind === 'weekly' ? a.limit.resetsAt : undefined} />
             </div>

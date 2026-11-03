@@ -11,7 +11,7 @@ import { Segmented, Spinner } from '../components/ui'
 import { useApp, type AppCtx } from '../context'
 import { play } from '../sound'
 import { useStats, useStatsFor } from '../useStats'
-import { cjkSpace, displayName, errMessage, formatTokens, formatUsd, formatUsdAxis, limitKindKey, shownPct, shownRemaining, sumTokens } from '../util'
+import { cjkSpace, displayName, errMessage, shortLabel, shortName, formatTokens, formatUsd, formatUsdAxis, limitKindKey, shownPct, shownRemaining, sumTokens } from '../util'
 
 /** Accounts the current scope covers, the desktop account first. */
 export function scopedAccounts(state: AppState, scope: string): AccountView[] {
@@ -189,7 +189,8 @@ function UsageChart({ stats }: { stats?: UsageStats }) {
     let k = 0
     return rows.map((r) => ({
       id: r.accountId,
-      label: r.label,
+      label: shortLabel(r.label),
+      title: r.label,
       color: r.accountId && r.accountId === currentId ? 'var(--accent)' : SERIES_COLORS[Math.min(SERIES_COLORS.length - 1, k++)]
     }))
   }, [rows.map((r) => r.accountId + r.label).join('|'), currentId])
@@ -253,7 +254,7 @@ function RecentConversations() {
     }
     openDialog({ type: 'switch', mode: 'both', cliSessionId: c.cliSessionId, cwd: c.cwd, title: c.title })
   }
-  const nameOf = (id?: string) => displayName(state.accounts.find((a) => a.id === id))
+  const nameOf = (id?: string) => shortName(state.accounts.find((a) => a.id === id))
   return (
     <section className="sec">
       <div className="sec-head">
@@ -324,7 +325,7 @@ export function Overview() {
             <span>{typeof advice.text === 'string' ? cjkSpace(advice.text) : advice.text}</span>
             {advice.action && (
               <button type="button" className="linkish" data-sound="none" onClick={advice.action.run}>
-                {advice.action.label}
+                {cjkSpace(advice.action.label)}
                 <IconArrowRight size={14} />
               </button>
             )}

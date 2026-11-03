@@ -225,7 +225,7 @@ export function SwitchDialog({
                     </span>
                     <span className="pick-sub">
                       {planText(a.plan, t)}
-                      {a.email ? ` · ${a.email}` : ''}
+                      {a.nickname && a.email ? ` · ${a.email}` : ''}
                     </span>
                   </span>
                   <span className="pick-meters">

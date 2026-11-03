@@ -50,8 +50,8 @@ function history(now: number, seed: number, endFh: number, endSd: number): Usage
   return points
 }
 
-function demoAccounts(lang: Language, now: number): AccountView[] {
-  const zh = lang === 'zh-CN'
+/** Three accounts named by their email, the way they show when the user has not named them. */
+function demoAccounts(_lang: Language, now: number): AccountView[] {
   return [
     {
       id: 'a1f0c3d2-0000-4000-8000-000000000001',
@@ -59,7 +59,6 @@ function demoAccounts(lang: Language, now: number): AccountView[] {
       orgUuid: 'b2e1d4c3-0000-4000-8000-000000000001',
       email: 'alice.chen@example.com',
       displayName: 'Alice',
-      nickname: zh ? '主号' : 'Main',
       color: '#7C5CFF',
       plan: { kind: 'max20x', label: 'Max 20x', multiplier: 20, billing: 'stripe_subscription', extraUsage: false },
       cliConfigDir: 'C:\\Users\\alice\\.claude',
@@ -92,7 +91,6 @@ function demoAccounts(lang: Language, now: number): AccountView[] {
       orgUuid: 'b2e1d4c3-0000-4000-8000-000000000002',
       email: 'bob.dev@example.com',
       displayName: 'Bob',
-      nickname: zh ? '副号' : 'Second',
       color: '#10B981',
       plan: { kind: 'max5x', label: 'Max 5x', multiplier: 5, billing: 'stripe_subscription', extraUsage: false },
       cliConfigDir: 'C:\\Users\\alice\\.quotadeck\\profiles\\bob',
@@ -121,7 +119,6 @@ function demoAccounts(lang: Language, now: number): AccountView[] {
       orgUuid: 'b2e1d4c3-0000-4000-8000-000000000003',
       email: 'carol.w@example.com',
       displayName: 'Carol',
-      nickname: zh ? '备用' : 'Spare',
       color: '#F59E0B',
       plan: { kind: 'pro', label: 'Pro', multiplier: 1, billing: 'stripe_subscription', extraUsage: true },
       cliConfigDir: 'C:\\Users\\alice\\.quotadeck\\profiles\\carol',
@@ -230,7 +227,7 @@ export function demoSetupStatus(lang: Language = 'zh-CN', fresh = false): SetupS
       state: 'ok',
       optional: false,
       title: zh ? '桌面端已登录' : 'Desktop app signed in',
-      detail: zh ? '当前登录的是 副号' : 'Signed in as Second'
+      detail: zh ? '当前登录的是 bob.dev@example.com' : 'Signed in as bob.dev@example.com'
     }),
     fresh
       ? c({
@@ -263,10 +260,10 @@ export function demoSetupStatus(lang: Language = 'zh-CN', fresh = false): SetupS
           state: 'fixable',
           optional: false,
           action: 'adopt-main',
-          title: zh ? '主号' : 'Main account',
+          title: zh ? '终端里已登录的账号' : 'Account signed in for the terminal',
           detail: zh ? '找到终端已登录的 alice.chen@example.com，会把它加进面板' : 'Found alice.chen@example.com signed in; it will be added'
         })
-      : c({ id: 'main-account', state: 'ok', optional: false, title: zh ? '主号' : 'Main account', detail: zh ? '已加入：主号（Max 20x）' : 'Added: Main (Max 20x)' }),
+      : c({ id: 'main-account', state: 'ok', optional: false, title: zh ? '终端里已登录的账号' : 'Account signed in for the terminal', detail: zh ? '已加入：alice.chen@example.com（Max 20x）' : 'Added: alice.chen@example.com (Max 20x)' }),
     fresh
       ? c({
           id: 'integration',
@@ -307,15 +304,15 @@ export function demoState(lang: Language = 'zh-CN', now = Date.now()): AppState 
   })
   const events: ActivityEvent[] = [
     {
-      ...ev(38, 'limit-hit', bob.id, zh ? '副号 的 5 小时额度用完了' : 'Second hit its 5-hour limit', zh ? '18:40 恢复 · 主号 还剩 77%' : 'Resets 18:40 · Main has 77% left'),
+      ...ev(38, 'limit-hit', bob.id, zh ? 'bob.dev@example.com 的 5 小时额度用完了' : 'bob.dev@example.com hit its 5-hour limit', zh ? '18:40 恢复 · alice.chen@example.com 还剩 77%' : 'Resets 18:40 · alice.chen@example.com has 77% left'),
       cliSessionId: latest.cliSessionId,
       cwd: latest.cwd
     },
-    ev(52, 'threshold', bob.id, zh ? '副号 5 小时额度已用 95%' : 'Second is at 95% of its 5-hour limit'),
-    ev(75, 'threshold', bob.id, zh ? '副号 5 小时额度已用 80%' : 'Second is at 80% of its 5-hour limit'),
-    ev(130, 'merge', undefined, zh ? '桌面端 Code 对话已合并' : 'Desktop Code conversations merged', zh ? '复制了 2 条到 主号 的列表' : 'Copied 2 into Main’s list'),
-    ev(300, 'reset', alice.id, zh ? '主号 的 5 小时额度已恢复' : 'Main’s 5-hour limit has reset'),
-    ev(2 * 24 * 60, 'login', carol.id, zh ? '已添加 备用（Pro）' : 'Added Spare (Pro)', 'carol.w@example.com'),
+    ev(52, 'threshold', bob.id, zh ? 'bob.dev@example.com 5 小时额度已用 95%' : 'bob.dev@example.com is at 95% of its 5-hour limit'),
+    ev(75, 'threshold', bob.id, zh ? 'bob.dev@example.com 5 小时额度已用 80%' : 'bob.dev@example.com is at 80% of its 5-hour limit'),
+    ev(130, 'merge', undefined, zh ? '桌面端 Code 对话已合并' : 'Desktop Code conversations merged', zh ? '复制了 2 条到 alice.chen@example.com 的列表' : 'Copied 2 into the list of alice.chen@example.com'),
+    ev(300, 'reset', alice.id, zh ? 'alice.chen@example.com 的 5 小时额度已恢复' : 'The 5-hour limit of alice.chen@example.com has reset'),
+    ev(2 * 24 * 60, 'login', carol.id, zh ? '已添加 carol.w@example.com（Pro）' : 'Added carol.w@example.com (Pro)'),
     ev(2 * 24 * 60 + 5, 'integration', undefined, zh ? '已接入 Claude Code（额度提醒 + 状态栏）' : 'Connected to Claude Code (limit alerts + status line)')
   ]
 
