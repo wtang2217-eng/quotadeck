@@ -76,8 +76,8 @@ export function TrayView({ api }: { api: QuotaDeckApi }) {
               <div className="tray-name ellipsis" title={displayName(a)}>
                 {shortName(a)}
               </div>
-              <MeterCell compact account={a} kind="fh" />
-              <MeterCell compact account={a} kind="sd" />
+              <MeterCell mode="compact" account={a} kind="fh" />
+              <MeterCell mode="compact" account={a} kind="sd" />
             </div>
           ))}
         </div>

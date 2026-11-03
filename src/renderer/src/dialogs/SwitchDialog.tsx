@@ -229,8 +229,8 @@ export function SwitchDialog({
                     </span>
                   </span>
                   <span className="pick-meters">
-                    <MeterCell compact label={t('fiveHour')} account={a} kind="fh" />
-                    <MeterCell compact label={t('sevenDay')} account={a} kind="sd" />
+                    <MeterCell mode="compact" label={t('fiveHour')} account={a} kind="fh" />
+                    <MeterCell mode="compact" label={t('sevenDay')} account={a} kind="sd" />
                   </span>
                 </button>
               ))}

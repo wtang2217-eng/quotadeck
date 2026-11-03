@@ -22,7 +22,7 @@ export function Accounts() {
           </button>
         </div>
       </header>
-      <AccountTable accounts={accounts} />
+      <AccountTable accounts={accounts} detailed />
     </div>
   )
 }

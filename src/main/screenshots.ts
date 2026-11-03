@@ -94,7 +94,9 @@ export async function captureScreenshots(win: BrowserWindow, backend: Backend, o
       fs.writeFileSync(path.join(outDir, `splash-${dark ? 'dark' : 'light'}.png`), png)
     }
   }
-  const list = mode === 'live' ? LIVE_SHOTS : review ? REVIEW_SHOTS : README_SHOTS
+  const only = process.env.QD_ONLY?.split(',').map((x) => x.trim())
+  // QD_ONLY=name,name retakes just those pictures.
+  const list = (mode === 'live' ? LIVE_SHOTS : review ? REVIEW_SHOTS : README_SHOTS).filter((s) => !only || only.includes(s.name))
   for (const shot of list) {
     if (shot.theme) nativeTheme.themeSource = shot.theme
     const patch: Partial<Settings> = {

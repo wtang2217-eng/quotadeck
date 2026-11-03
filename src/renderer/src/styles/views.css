@@ -1282,8 +1282,9 @@
   color: var(--warn-text);
 }
 .src-dot {
-  width: 5px;
-  height: 5px;
+  position: relative;
+  width: 6px;
+  height: 6px;
   flex: none;
   align-self: center;
   border-radius: 50%;
@@ -1315,4 +1316,14 @@
 }
 .meter-pace.warn {
   color: var(--warn-text);
+}
+
+.src-dot.has-tip::after {
+  bottom: calc(100% + 10px);
+}
+.pace-full {
+  color: var(--warn-text);
+}
+.meter-cell .meter-reset {
+  white-space: nowrap;
 }
