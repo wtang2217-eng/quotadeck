@@ -103,7 +103,11 @@ const zh = {
   'setup.loginMissing': '可选。开机后待在托盘里，额度提醒不会漏',
   'setup.loginDone': '已开启开机启动',
   'setup.skipped': '不需要',
-  'setup.busy': '已经在配置了'
+  'setup.busy': '已经在配置了',
+  'stats.note': '按 API 标价折算，仅供参考，订阅不按这个扣费',
+  'stats.unattributed': '不在面板里的号',
+  'csv.header': '日期|账号|邮箱|模型|输入 token|输出 token|缓存写入 token（5 分钟）|缓存写入 token（1 小时）|缓存读取 token|请求次数|按 API 标价折算（美元）',
+  'csv.fileName': 'QuotaDeck 用量账本 {day}'
 }
 
 const en: Record<keyof typeof zh, string> = {
@@ -207,7 +211,11 @@ const en: Record<keyof typeof zh, string> = {
   'setup.loginMissing': 'Optional. Waits in the tray so no alert is missed',
   'setup.loginDone': 'QuotaDeck will open at login',
   'setup.skipped': 'Not needed',
-  'setup.busy': 'Setup is already running'
+  'setup.busy': 'Setup is already running',
+  'stats.note': 'At API list prices, for reference only; subscriptions are not billed this way',
+  'stats.unattributed': 'Accounts not in QuotaDeck',
+  'csv.header': 'Date|Account|Email|Model|Input tokens|Output tokens|Cache write tokens (5 min)|Cache write tokens (1 h)|Cache read tokens|Requests|At API list prices (USD)',
+  'csv.fileName': 'QuotaDeck usage ledger {day}'
 }
 
 export type MainKey = keyof typeof zh

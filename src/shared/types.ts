@@ -476,57 +476,87 @@ export interface SetupProgress {
   status?: SetupStatus
 }
 
-// ---------------------------------------------------------------- usage statistics
+// ---------------------------------------------------------------- usage ledger and statistics
+// QuotaDeck keeps its own ledger of every request (~/.quotadeck/ledger), so the history outlives Claude Code's
+// clean-up of old transcripts. Costs are what the tokens would cost at API list prices; subscriptions are not billed
+// that way, and the UI says so.
 
-export type StatsRange = '7d' | '30d'
+/** "today" is the current calendar day; "all" is everything in the ledger. */
+export type StatsRange = 'today' | '7d' | '30d' | '90d' | 'all'
 
 export interface StatsQuery {
   range: StatsRange
-  /** Only this account. */
+  /** One account id, or "all" (the default) for every account. */
   accountId?: string
 }
 
 export interface TokenTotals {
   input: number
   output: number
+  /** Cache writes that live 5 minutes (1.25x the input price). */
+  cacheWrite5m: number
+  /** Cache writes that live 1 hour (2x the input price). */
+  cacheWrite1h: number
   cacheRead: number
-  cacheWrite: number
+}
+
+/** List prices in US dollars per million tokens. */
+export interface ModelPrice {
+  /** e.g. "Opus 5.5". */
+  model: string
+  input: number
+  output: number
+  /** When the list gives one; otherwise 0.1x input. Cache writes are always 1.25x (5 min) and 2x (1 h) input. */
+  cacheRead?: number
+  /** Higher prices for prompts over `above` tokens. */
+  longContext?: { above: number; input: number; output: number }
 }
 
 export interface StatsDay {
   /** YYYY-MM-DD in the chosen time zone. */
   day: string
   tokens: TokenTotals
-  /** Cost-weighted usage units (the same units the live estimate uses). */
-  units: number
-  /** What the same tokens would cost at API list prices. */
   costUsd: number
-  replies: number
-  /** Units per account id ("" for replies that could not be attributed). */
+  requests: number
+  /** Cost-weighted usage units (what the live estimate counts). */
+  units: number
+  /** US dollars per account id ("" = not attributed to any of your accounts). */
   byAccount: Record<string, number>
+}
+
+/** One hour of the current day, for range "today". */
+export interface StatsHour {
+  /** 0-23 in the chosen time zone. */
+  hour: number
+  tokens: TokenTotals
+  costUsd: number
+  requests: number
 }
 
 export type ModelFamily = 'fable' | 'opus' | 'sonnet' | 'haiku' | 'other'
 
 export interface StatsModel {
-  /** e.g. "claude-opus-5-5". */
+  /** A model id seen in the transcripts, e.g. "claude-opus-5-5". */
   model: string
-  /** e.g. "Opus 5.5". */
+  /** e.g. "Opus 5.5"; ids of the same model are combined under one label. */
   label: string
   family: ModelFamily
   tokens: TokenTotals
-  units: number
   costUsd: number
-  replies: number
+  requests: number
+  units: number
+  /** The price the costs were computed with. */
+  price: ModelPrice
 }
 
 export interface StatsProject {
   cwd?: string
   projectDir: string
   name: string
-  units: number
+  tokens: TokenTotals
   costUsd: number
-  replies: number
+  requests: number
+  units: number
   conversations: number
 }
 
@@ -537,37 +567,59 @@ export interface StatsConversation {
   /** Account that ran most of it. */
   accountId?: string
   tokens: TokenTotals
-  units: number
   costUsd: number
-  replies: number
+  requests: number
+  units: number
   lastActivityAt: number
+}
+
+export interface StatsAccount {
+  /** "" = requests that could not be attributed to any of your accounts. */
+  accountId: string
+  /** Nickname or email; kept in the ledger, so removed accounts still have a name. */
+  label: string
+  email?: string
+  tokens: TokenTotals
+  costUsd: number
+  requests: number
+  units: number
+  conversations: number
 }
 
 export interface UsageStats {
   range: StatsRange
-  accountId?: string
+  /** The account the numbers are for, or "all". */
+  accountId: string
   /** Start of the first day, and the time the numbers were computed. */
   from: number
   to: number
-  /** Time zone the days and the heatmap use. */
+  /** Time zone the days, hours and heatmap use. */
   timeZone: string
-  totals: { tokens: TokenTotals; units: number; costUsd: number; replies: number; conversations: number; activeDays: number }
+  /** First day in the ledger (YYYY-MM-DD), if it has anything. */
+  firstDay?: string
+  totals: { tokens: TokenTotals; costUsd: number; requests: number; conversations: number; units: number; activeDays: number }
+  /** Independent of the range (same account filter): today so far, this calendar month, everything recorded. */
+  fixed: { todayUsd: number; monthUsd: number; allTimeUsd: number }
   /** Every day of the range, oldest first, including empty days. */
   days: StatsDay[]
+  /** Only for range "today": its 24 hours. */
+  hours?: StatsHour[]
   /** Most used first. */
   models: StatsModel[]
   /** Most used first, at most 12. */
   projects: StatsProject[]
-  /** heatmap[weekday][hour] = units; weekday 0 = Monday. */
+  /** heatmap[weekday][hour] = US dollars; weekday 0 = Monday. */
   heatmap: number[][]
   /** Most used first, at most 10. */
   topConversations: StatsConversation[]
-  /** Units, cost and replies per account id ("" = not attributed). */
-  byAccount: Array<{ accountId: string; units: number; costUsd: number; replies: number }>
+  /** Every account with usage in the range, most used first (just the one account when filtered). */
+  byAccount: StatsAccount[]
   pricing: {
     /** Date of the price list used, YYYY-MM-DD. */
     asOf: string
     currency: 'USD'
+    /** "按 API 标价折算，仅供参考，订阅不按这个扣费", in the UI language. Show it wherever a dollar amount is shown. */
+    note: string
   }
   /** Transcripts are still being read for the first time; numbers will grow. */
   partial: boolean

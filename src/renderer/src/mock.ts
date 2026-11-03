@@ -3,7 +3,7 @@
 
 import type { QuotaDeckApi } from '@shared/api'
 import { demoConversations, demoProjects, demoSetupStatus, demoState, demoStats } from '@shared/demo'
-import type { ActivityEvent, AppState, Language, LoginProgress, MergeStatus, Page, PendingSwitch, Settings, SetupProgress, UiCommand } from '@shared/types'
+import type { ActivityEvent, AppState, Language, LoginProgress, MergeStatus, Page, PendingSwitch, Settings, SetupProgress, StatsQuery, UiCommand } from '@shared/types'
 
 type Listener<T> = (v: T) => void
 
@@ -311,9 +311,14 @@ export function createMockApi(): QuotaDeckApi {
       log('exportConversation', cliSessionId)
       return { ok: true, path: 'C:\\Users\\alice\\Documents\\demo.md' }
     },
-    async getStats(query: { range: '7d' | '30d'; accountId?: string }) {
+    async getStats(query: StatsQuery) {
       await wait(160)
       return demoStats(lang, query.range, query.accountId)
+    },
+    async exportLedgerCsv(query: StatsQuery) {
+      await wait(300)
+      log('exportLedgerCsv', query)
+      return { ok: true, path: 'C:\\Users\\alice\\Documents\\QuotaDeck 用量账本.csv' }
     },
     async getSetupStatus() {
       await wait(120)

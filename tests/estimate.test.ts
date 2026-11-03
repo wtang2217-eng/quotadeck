@@ -114,7 +114,7 @@ describe('UsageScanner', () => {
     const file = path.join(dir, 'claude', 'projects', 'p', 's1.jsonl')
     fs.writeFileSync(file, [line('m1', now - 60_000, 1_000_000), line('m1', now - 60_000, 1_000_000), line('m2', now - 30_000, 1_000_000), ''].join('\n'))
     const scanner = new UsageScanner(path.join(dir, 'scan.json'))
-    await scanner.scan(now, () => ORG_A)
+    await scanner.scan(now, { orgAt: () => ORG_A })
     const buckets = Object.values(scanner.buckets)
     const sum = (k: 'o' | 'c' | 'n' | 'u') => buckets.reduce((s, b) => s + b[k], 0)
     expect(sum('n')).toBe(2)

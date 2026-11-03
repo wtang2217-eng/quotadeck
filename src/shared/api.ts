@@ -74,8 +74,10 @@ export interface QuotaDeckApi {
   /** Ask where to save, then write the conversation as Markdown. */
   exportConversation(cliSessionId: string): Promise<ExportResult>
 
-  // Usage statistics (from the local transcripts)
+  // Usage ledger (kept by QuotaDeck from the local transcripts; costs at API list prices, for reference only)
   getStats(query: StatsQuery): Promise<UsageStats>
+  /** Ask where to save, then write one CSV row per day × account × model for the range. */
+  exportLedgerCsv(query: StatsQuery): Promise<ExportResult>
 
   // One-click setup
   getSetupStatus(): Promise<SetupStatus>
@@ -132,6 +134,7 @@ export const IPC = {
   setFavorite: 'qd:set-favorite',
   exportConversation: 'qd:export-conversation',
   getStats: 'qd:get-stats',
+  exportLedgerCsv: 'qd:export-ledger-csv',
   getSetupStatus: 'qd:get-setup-status',
   runSetup: 'qd:run-setup',
   setupProgress: 'qd:setup-progress',
